@@ -42,7 +42,7 @@ var TRANSACTION_CHECK_TIME = 1e4; // 10秒
 /**
  * @func web3Instance()
  */
-function web3Instance;(self) {
+function web3Instance(self) {
 	if (!self.m_web3) {
 		var url = self.m_url; // utils.config.ethereumPosNode;
 		var { HttpProvider, WebsocketProvider } = Web3Class.providers;
@@ -55,7 +55,7 @@ function web3Instance;(self) {
 			throw Error(`Can't create 'Web3 provider`);
 		}
 		self.m_web3 = new Web3Class(provider);
-		self.m_web3.eth.defaultAccount = device.getAccountPublicKey();
+		self.m_web3.eth.defaultAccount = self.account;
 	}
 	return self.m_web3;
 }
@@ -64,7 +64,7 @@ function web3Instance;(self) {
  * @func createContract()
  */
 function createContract(self, address, abi, name = '') {
-	var account = device.getAccountPublicKey();
+	var account = self.account;
 	var web3 = web3Instance(self);
 	var contract = new web3.eth.Contract(abi, address, { from: account, gas: 1000000 });
 
@@ -118,9 +118,9 @@ function createContract(self, address, abi, name = '') {
 	// end
 
 	if (name) {
-		this.m_contract[name] = contract;
+		self.m_contract[name] = contract;
 	}
-	this.m_contract[address] = contract;
+	self.m_contract[address] = contract;
 
 	return contract;
 }
@@ -131,6 +131,7 @@ function createContract(self, address, abi, name = '') {
 class Web3 extends Notification {
 
 	constructor(url, account) {
+		super();
 		this.m_url = url || 'http://127.0.0.1:8545';
 		this.m_prevSafeTransactionTime = 0;
 		this.m_account = account;
