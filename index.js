@@ -273,6 +273,8 @@ class Web3 extends Notification {
 
 			await self.beforeSafeTransaction();
 
+			this.trigger('SignTransaction');
+
 			var web3 = web3Instance(self);
 			var account = this.this.account;
 			var nonce = await self.getNonce();
