@@ -35,9 +35,9 @@ var Web3Class = require('web3');
 var { Notification } = require('qkit/event');
 var _fix_web3 = require('./_fix_web3');
 
-var SAFE_TRANSACTION_MAX_TIMEOUT = 180 * 1e3;  // 180Ãë
+var SAFE_TRANSACTION_MAX_TIMEOUT = 180 * 1e3;  // 180ç§’
 var TRANSACTION_MAX_BLOCK_RANGE = 32;
-var TRANSACTION_CHECK_TIME = 1e4; // 10Ãë
+var TRANSACTION_CHECK_TIME = 1e4; // 10ç§’
 
 /**
  * @func web3Instance()
@@ -69,14 +69,13 @@ function createContract(self, address, abi, name = '') {
 	var contract = new web3.eth.Contract(abi, address, { from: account, gas: 1000000 });
 
 	/**
-	 * @func signTx(param) ¶Ô½»Ò×½øÐÐÇ©Ãû
+	 * @func signTx(param) å¯¹äº¤æ˜“è¿›è¡Œç­¾å
 	 */
 	async function signTx(tx, param) { //
 		var gas = 1000000 + utils.random(0, 100);
 		var data = tx.encodeABI();
-		var ethereumDetails = self.m_ethereumDetails;
-		var gasPrice = Number(ethereumDetails.ethereum_details_cache ?
-			ethereumDetails.ethereum_details_cache.gasPrice : 21000);
+		var gasPrice = Number(self.gasPrice) || 21000;
+
 		var rawTx = Object.assign(
 			{ from: account, gasLimit: gas, gasPrice: gasPrice, value: '0x00' }, param,
 			{ to: address, data: data, }
@@ -86,7 +85,7 @@ function createContract(self, address, abi, name = '') {
 	}
 
 	/**
-	 * @func sendSignTransaction(param) ¶Ô½»Ò×½øÐÐÇ©Ãû²¢·¢ËÍ
+	 * @func sendSignTransaction(param) å¯¹äº¤æ˜“è¿›è¡Œç­¾åå¹¶å‘é€
 	 */
 	function Inl_sendSignTransaction(tx, param) {
 		return new Promise(async function(resolve, reject) {
@@ -134,9 +133,18 @@ class Web3 extends Notification {
 		super();
 		this.m_url = url || 'http://127.0.0.1:8545';
 		this.m_prevSafeTransactionTime = 0;
-		this.m_account = account;
+		this.m_account = account || '';
 		this.m_nonce_cache = -1;
 		this.m_contract = {};
+		this.m_gasPrice = 1e9;
+	}
+
+	get gasPrice() {
+		return this.m_gasPrice;
+	}
+
+	set gasPrice(value) {
+		this.m_gasPrice = Number(value) || 21000;
 	}
 
 	get web3() {
@@ -156,7 +164,7 @@ class Web3 extends Notification {
 	}
 
 	/**
-	 * @func sendSignTransaction(param) ¶Ô½»Ò×½øÐÐÇ©Ãû²¢·¢ËÍ
+	 * @func sendSignTransaction(param) å¯¹äº¤æ˜“è¿›è¡Œç­¾åå¹¶å‘é€
 	 */
 	sendSignTransaction(signatureData, param = {}) {
 		var self = this;
@@ -252,13 +260,13 @@ class Web3 extends Notification {
 	}
 
 	/**
-	 * @func safeTransaction(cb) ¿ªÊ¼°²È«½»Ò×
+	 * @func safeTransaction(cb) å¼€å§‹å®‰å…¨äº¤æ˜“
 	 */
 	async safeTransaction(cb) {
 		var self = this;
 
-		var ok = await new Monitor(1e3, 2e4).start(e=>{ // 20ÃëÄÚÖØÊÔ20´Î
-			// Èç¹ûÉÏÒ»´ÎÇëÇóÊ±¼ä³¬¹ý°²È«½»Ò×³¬Ê±Ê±¼ä,ÔÊÐí·¢ËÍÕâ±Ê½»Ò×
+		var ok = await new Monitor(1e3, 2e4).start(e=>{ // 20ç§’å†…é‡è¯•20æ¬¡
+			// å¦‚æžœä¸Šä¸€æ¬¡è¯·æ±‚æ—¶é—´è¶…è¿‡å®‰å…¨äº¤æ˜“è¶…æ—¶æ—¶é—´,å…è®¸å‘é€è¿™ç¬”äº¤æ˜“
 			if (self.m_prevSafeTransactionTime + SAFE_TRANSACTION_MAX_TIMEOUT < Date.now()) {
 				e.stop();
 				return true;
