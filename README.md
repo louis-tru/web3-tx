@@ -1,2 +1,2 @@
-HC Photo web3
+Sign transaction web3
 =====================
