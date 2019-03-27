@@ -35,9 +35,9 @@ var Web3Class = require('web3');
 var { Notification } = require('qkit/event');
 var _fix_web3 = require('./_fix_web3');
 
-var SAFE_TRANSACTION_MAX_TIMEOUT = 180 * 1e3;  // 180ç§’
+var SAFE_TRANSACTION_MAX_TIMEOUT = 180 * 1e3;  // 180Ãë
 var TRANSACTION_MAX_BLOCK_RANGE = 32;
-var TRANSACTION_CHECK_TIME = 1e4; // 10ç§’
+var TRANSACTION_CHECK_TIME = 1e4; // 10Ãë
 
 /**
  * @func web3Instance()
@@ -69,7 +69,7 @@ function createContract(self, address, abi, name = '') {
 	var contract = new web3.eth.Contract(abi, address, { from: account, gas: 1000000 });
 
 	/**
-	 * @func signTx(param) å¯¹äº¤æ˜“è¿›è¡Œç­¾å
+	 * @func signTx(param) ¶Ô½»Ò×½øÐÐÇ©Ãû
 	 */
 	async function signTx(tx, param) { //
 		var gas = 1000000 + utils.random(0, 100);
@@ -86,7 +86,7 @@ function createContract(self, address, abi, name = '') {
 	}
 
 	/**
-	 * @func sendSignTransaction(param) å¯¹äº¤æ˜“è¿›è¡Œç­¾åå¹¶å‘é€
+	 * @func sendSignTransaction(param) ¶Ô½»Ò×½øÐÐÇ©Ãû²¢·¢ËÍ
 	 */
 	function Inl_sendSignTransaction(tx, param) {
 		return new Promise(async function(resolve, reject) {
@@ -156,7 +156,7 @@ class Web3 extends Notification {
 	}
 
 	/**
-	 * @func sendSignTransaction(param) å¯¹äº¤æ˜“è¿›è¡Œç­¾åå¹¶å‘é€
+	 * @func sendSignTransaction(param) ¶Ô½»Ò×½øÐÐÇ©Ãû²¢·¢ËÍ
 	 */
 	sendSignTransaction(signatureData, param = {}) {
 		var self = this;
@@ -252,13 +252,13 @@ class Web3 extends Notification {
 	}
 
 	/**
-	 * @func safeTransaction(cb) å¼€å§‹å®‰å…¨äº¤æ˜“
+	 * @func safeTransaction(cb) ¿ªÊ¼°²È«½»Ò×
 	 */
 	async safeTransaction(cb) {
 		var self = this;
 
-		var ok = await new Monitor(1e3, 2e4).start(e=>{ // 20ç§’å†…é‡è¯•20æ¬¡
-			// å¦‚æžœä¸Šä¸€æ¬¡è¯·æ±‚æ—¶é—´è¶…è¿‡å®‰å…¨äº¤æ˜“è¶…æ—¶æ—¶é—´,å…è®¸å‘é€è¿™ç¬”äº¤æ˜“
+		var ok = await new Monitor(1e3, 2e4).start(e=>{ // 20ÃëÄÚÖØÊÔ20´Î
+			// Èç¹ûÉÏÒ»´ÎÇëÇóÊ±¼ä³¬¹ý°²È«½»Ò×³¬Ê±Ê±¼ä,ÔÊÐí·¢ËÍÕâ±Ê½»Ò×
 			if (self.m_prevSafeTransactionTime + SAFE_TRANSACTION_MAX_TIMEOUT < Date.now()) {
 				e.stop();
 				return true;
@@ -277,7 +277,7 @@ class Web3 extends Notification {
 			this.trigger('SignTransaction');
 
 			var web3 = web3Instance(self);
-			var account = this.this.account;
+			var account = this.account;
 			var nonce = await self.getNonce();
 			var args = { web3, account, nonce };
 
