@@ -169,6 +169,7 @@ class Web3 extends Notification {
 	sendSignTransaction(signatureData, param = {}) {
 		var self = this;
 		var web3 = web3Instance(self);
+		var TIMEOUT_ERRNO = errno.ERR_REQUEST_TIMEOUT[0];
 
 		return new Promise(async function(resolve, reject) {
 
@@ -209,7 +210,11 @@ class Web3 extends Notification {
 						try {
 							receipt = await web3.eth.getTransactionReceipt(transactionHash);
 						} catch(err) {
-							console.error(err);
+							if (err.code != TIMEOUT_ERRNO) { // timeout
+								console.error(err);
+							} else {
+								console.warn(err);
+							}
 						}
 						if (receipt && receipt.blockHash) {
 							complete(null, receipt);
@@ -244,13 +249,15 @@ class Web3 extends Notification {
 							var receipt = await web3.eth.getTransactionReceipt(transactionHash);
 							if (receipt && receipt.blockHash) {
 								complete(null, receipt);
-								return;
 							}
 						} catch(err) {
-							console.error(err);
+							if (err.code != TIMEOUT_ERRNO) {
+								console.error(err);
+							} else {
+								console.warn(err);
+							}
 						}
-					}
-					if (e.code != errno.ERR_REQUEST_TIMEOUT[0]) {
+					} else if (e.code != TIMEOUT_ERRNO) {
 						complete(e);
 					}
 				}

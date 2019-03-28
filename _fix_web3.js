@@ -15,7 +15,20 @@ function InvalidResponse(result) {
 	// var message = !!result && !!result.error && !!result.error.message ? 
 	// result.error.message : 'Invalid JSON RPC response: ' + JSON.stringify(result);
 	return Error.new(errno.ERR_ETHEREUM_FAULT_ERROR);
-};
+}
+
+function ErrorResponse(result) {
+	// var message = !!result && !!result.error && !!result.error.message ? 
+	// 	result.error.message : JSON.stringify(result);
+	result = result || {};
+	var err = result.error ? result.error: result;
+	err.rpcCode = err.code || -1;
+	if (err.rpcCode == -32065) {
+		return Error.new(err, errno.ERR_REQUEST_TIMEOUT[0]);
+	} else {
+		return Error.new(err);
+	}
+}
 
 function send(payload, callback) {
 	var _this = this;
@@ -57,6 +70,7 @@ if (package_json.dependencies.web3 == '1.0.0-beta.37') {
 
 	errors.ConnectionTimeout = ConnectionTimeout;
 	errors.InvalidResponse = InvalidResponse;
+	errors.ErrorResponse = ErrorResponse;
 	HttpProvider.prototype.send = send;
 }
 
