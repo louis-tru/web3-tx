@@ -55,7 +55,7 @@ function web3Instance(self) {
 			throw Error(`Can't create 'Web3 provider`);
 		}
 		self.m_web3 = new Web3Class(provider);
-		self.m_web3.eth.defaultAccount = self.account;
+		self.m_web3.eth.defaultAccount = self.defaultAccount;
 	}
 	return self.m_web3;
 }
@@ -64,7 +64,7 @@ function web3Instance(self) {
  * @func createContract()
  */
 function createContract(self, address, abi, name = '') {
-	var account = self.account;
+	var account = self.defaultAccount;
 	var web3 = web3Instance(self);
 	var contract = new web3.eth.Contract(abi, address, { from: account, gas: 1000000 });
 
@@ -125,16 +125,15 @@ function createContract(self, address, abi, name = '') {
 }
 
 /**
- * @class Web3
+ * @class SafeWeb3
  */
-class Web3 extends Notification {
+class SafeWeb3 extends Notification {
 
-	constructor(url, account) {
+	constructor(url, defaultAccount = '') {
 		super();
 		this.m_url = url || 'http://127.0.0.1:8545';
-		this.m_prevSafeTransactionTime = 0;
-		this.m_account = account || '';
-		this.m_nonce_cache = -1;
+		this.m_prevSafeTransactionTime = {};
+		this.m_default_account = defaultAccount || '';
 		this.m_contract = {};
 		this.m_gasPrice = 1e9;
 	}
@@ -147,12 +146,12 @@ class Web3 extends Notification {
 		this.m_gasPrice = Number(value) || 21000;
 	}
 
-	get web3() {
+	get core() {
 		return web3Instance(this);
 	}
 
-	get account() {
-		return this.getAccount();
+	get defauktAccount() {
+		return this.getDefaultAccount();
 	}
 
 	createContract(address, abi, name = '') {
@@ -269,12 +268,15 @@ class Web3 extends Notification {
 	/**
 	 * @func safeTransaction(cb) 开始安全交易
 	 */
-	async safeTransaction(cb) {
+	async safeTransaction(cb, account = '') {
 		var self = this;
+
+		account = account || this.defaultAccount;
 
 		var ok = await new Monitor(1e3, 2e4).start(e=>{ // 20秒内重试20次
 			// 如果上一次请求时间超过安全交易超时时间,允许发送这笔交易
-			if (self.m_prevSafeTransactionTime + SAFE_TRANSACTION_MAX_TIMEOUT < Date.now()) {
+			var tiem = self.m_prevSafeTransactionTime[account] || 0;
+			if (tiem + SAFE_TRANSACTION_MAX_TIMEOUT < Date.now()) {
 				e.stop();
 				return true;
 			}
@@ -285,31 +287,30 @@ class Web3 extends Notification {
 		var now = Date.now();
 
 		try {
-			self.m_prevSafeTransactionTime = now;
+			self.m_prevSafeTransactionTime[account] = now;
 
 			await self.beforeSafeTransaction();
 
 			this.trigger('SignTransaction');
 
 			var web3 = web3Instance(self);
-			var account = this.account;
-			var nonce = await self.getNonce();
+			var nonce = await self.getNonce(account);
 			var args = { web3, account, nonce };
 
 			var result = utils.isAsync(cb) ? await cb(args) : cb(args);
 			
 			return result;
 		} finally {
-			if (now == self.m_prevSafeTransactionTime) {
-				self.m_prevSafeTransactionTime = 0;
+			if (now == self.m_prevSafeTransactionTime[account]) {
+				self.m_prevSafeTransactionTime[account] = 0;
 			}
 		}
 	}
 
 	// Rewrite by method
 
-	getAccount() {
-		return this.m_account;
+	getDefaultAccount() {
+		return this.m_default_account;
 	}
 
 	async getBlockNumber() {
@@ -321,10 +322,10 @@ class Web3 extends Notification {
 		return blockNumber;
 	}
 
-	async getNonce() {
+	async getNonce(account = '') {
+		account = account || this.defaultAccount;
 		var web3 = web3Instance(this);
-		this.m_nonce_cache = await web3.eth.getTransactionCount(this.account, 'latest');
-		return this.m_nonce_cache;
+		return await web3.eth.getTransactionCount(account, 'latest');
 	}
 
 	async sign(txData) {
@@ -336,4 +337,4 @@ class Web3 extends Notification {
 
 };
 
-exports.Web3 = Web3;
+exports.SafeWeb3 = SafeWeb3;
