@@ -150,7 +150,7 @@ class SafeWeb3 extends Notification {
 		return web3Instance(this);
 	}
 
-	get defauktAccount() {
+	get defaultAccount() {
 		return this.getDefaultAccount();
 	}
 
