@@ -38,6 +38,8 @@ var _fix_web3 = require('./_fix_web3');
 var SAFE_TRANSACTION_MAX_TIMEOUT = 180 * 1e3;  // 180秒
 var TRANSACTION_MAX_BLOCK_RANGE = 32;
 var TRANSACTION_CHECK_TIME = 1e4; // 10秒
+var DEFAULT_GAS_LIMIT = 1e8;
+var DEFAULT_GAS_PRICE = 1e5;
 
 /**
  * @func web3Instance()
@@ -66,19 +68,25 @@ function web3Instance(self) {
 function createContract(self, address, abi, name = '') {
 	var account = self.defaultAccount;
 	var web3 = web3Instance(self);
-	var contract = new web3.eth.Contract(abi, address, { from: account, gas: 1000000 });
+	var contract = new web3.eth.Contract(abi, address, { 
+		from: account, gas: self.gasLimit, gasLimit: self.gasLimit,
+	});
 
 	/**
 	 * @func signTx(param) 对交易进行签名
 	 */
 	async function signTx(tx, param) { //
-		var gas = 1000000 + utils.random(0, 100);
 		var data = tx.encodeABI();
-		var gasPrice = Number(self.gasPrice) || 21000;
+		var gasLimit = self.gasLimit;
+		var gasPrice = self.gasPrice + utils.random(0, 1000);
 
-		var rawTx = Object.assign(
-			{ from: account, gasLimit: gas, gasPrice: gasPrice, value: '0x00' }, param,
-			{ to: address, data: data, }
+		var rawTx = Object.assign({
+				from: account,
+				gas: gasLimit,
+				gasLimit: gasLimit,
+				gasPrice: gasPrice, value: '0x00',
+			},
+			param, { to: address, data: data }
 		);
 		var signatureData = await self.sign(rawTx);
 		return signatureData;
@@ -135,7 +143,16 @@ class SafeWeb3 extends Notification {
 		this.m_prevSafeTransactionTime = {};
 		this.m_default_account = defaultAccount || '';
 		this.m_contract = {};
-		this.m_gasPrice = 1e9;
+		this.m_gasLimit = DEFAULT_GAS_LIMIT;
+		this.m_gasPrice = DEFAULT_GAS_PRICE;
+	}
+
+	get gasLimit() {
+		return this.m_gasLimit;
+	}
+
+	set gasLimit(value) {
+		this.m_gasLimit = Number(value) || DEFAULT_GAS_LIMIT;
 	}
 
 	get gasPrice() {
@@ -143,7 +160,7 @@ class SafeWeb3 extends Notification {
 	}
 
 	set gasPrice(value) {
-		this.m_gasPrice = Number(value) || 21000;
+		this.m_gasPrice = Number(value) || DEFAULT_GAS_PRICE;
 	}
 
 	get core() {
