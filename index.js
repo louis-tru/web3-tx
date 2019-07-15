@@ -28,11 +28,11 @@
  *
  * ***** END LICENSE BLOCK ***** */
 
-var utils = require('qkit');
+var utils = require('langoukit');
 var errno = require('./errno');
-var { Monitor } = require('qkit/monitor');
+var { Monitor } = require('langoukit/monitor');
 var Web3Class = require('web3');
-var { Notification } = require('qkit/event');
+var { Notification } = require('langoukit/event');
 var _fix_web3 = require('./_fix_web3');
 
 var SAFE_TRANSACTION_MAX_TIMEOUT = 180 * 1e3;  // 180秒

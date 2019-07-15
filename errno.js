@@ -1,5 +1,5 @@
 
-var errno = require('qkit/errno');
+var errno = require('langoukit/errno');
 
 module.exports = {
 	...errno,
