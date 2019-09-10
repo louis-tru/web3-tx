@@ -4,7 +4,7 @@
  */
 
 var errno = require('./errno');
-var utils = require('langoukit');
+var utils = require('lkit');
 var package_json = require('./package');
 
 function ConnectionTimeout(ms) {

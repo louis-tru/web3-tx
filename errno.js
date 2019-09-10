@@ -1,5 +1,5 @@
 
-var errno = require('langoukit/errno');
+var errno = require('lkit/errno');
 
 module.exports = {
 	...errno,
