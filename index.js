@@ -28,11 +28,11 @@
  *
  * ***** END LICENSE BLOCK ***** */
 
-var utils = require('lkit');
+var utils = require('nxkit');
 var errno = require('./errno');
-var { Monitor } = require('lkit/monitor');
+var { Monitor } = require('nxkit/monitor');
 var Web3Class = require('web3');
-var { Notification } = require('lkit/event');
+var { Notification } = require('nxkit/event');
 var _fix_web3 = require('./_fix_web3');
 
 var SAFE_TRANSACTION_MAX_TIMEOUT = 300 * 1e3;  // 180秒
