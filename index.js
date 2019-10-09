@@ -37,7 +37,7 @@ var _fix_web3 = require('./_fix_web3');
 
 var SAFE_TRANSACTION_MAX_TIMEOUT = 300 * 1e3;  // 180秒
 var TRANSACTION_MAX_BLOCK_RANGE = 32;
-var TRANSACTION_CHECK_TIME = 1e4; // 10秒
+var TRANSACTION_CHECK_TIME = 3e4; // 3秒
 var DEFAULT_GAS_LIMIT = 1e8;
 var DEFAULT_GAS_PRICE = 1e5;
 
