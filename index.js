@@ -30,9 +30,8 @@
 
 var utils = require('nxkit');
 var errno = require('./errno');
-var { Monitor } = require('nxkit/monitor');
 var Web3Class = require('web3');
-var { Notification } = require('nxkit/event');
+var { Notification, List } = require('nxkit/event');
 var _fix_web3 = require('./_fix_web3');
 
 var SAFE_TRANSACTION_MAX_TIMEOUT = 300 * 1e3;  // 180秒
@@ -133,6 +132,26 @@ function createContract(self, address, abi, name = '') {
 }
 
 /**
+ * @func dequeue()
+ */
+async function dequeue(self, queue) {
+	var first = queue.first();
+	if (!first) return;
+	try {
+		await self.beforeSafeTransaction(first.value);
+		this.trigger('SignTransaction', first.value);
+		var web3 = web3Instance(self);
+		var nonce = await self.getNonce(account);
+		var args = { web3, account, nonce, context: queue.shift() };
+		return await args.context.exec(args);
+	} catch (err) {
+		console.error(err);
+		await utils.sleep(1e3); // sleep 1s
+	}
+	dequeue(self, queue);
+}
+
+/**
  * @class SafeWeb3
  */
 class SafeWeb3 extends Notification {
@@ -145,6 +164,7 @@ class SafeWeb3 extends Notification {
 		this.m_contract = {};
 		this.m_gasLimit = DEFAULT_GAS_LIMIT;
 		this.m_gasPrice = DEFAULT_GAS_PRICE;
+		this.m_transaction_queues = {};
 	}
 
 	get gasLimit() {
@@ -204,7 +224,7 @@ class SafeWeb3 extends Notification {
 			var completed = false
 			var is_check = false;
 			var transactionHash = '';
-			
+
 			function complete(err, receipt) {
 				if (!completed) {
 					completed = true;
@@ -283,45 +303,69 @@ class SafeWeb3 extends Notification {
 	}
 
 	/**
-	 * @func safeTransaction(cb) 开始安全交易
+	 * @func safeTransaction(exec) 开始安全交易
 	 */
-	async safeTransaction(cb, account = '') {
-		var self = this;
-
+	safeTransaction(exec, options = {}) {
 		account = account || this.defaultAccount;
 
-		var ok = await new Monitor(1e3, 2e4).start(e=>{ // 20秒内重试20次
-			// 如果上一次请求时间超过安全交易超时时间,允许发送这笔交易
-			var tiem = self.m_prevSafeTransactionTime[account] || 0;
-			if (tiem + SAFE_TRANSACTION_MAX_TIMEOUT < Date.now()) {
-				e.stop();
-				return true;
-			}
-		});
-
-		utils.assert(ok, errno.ERR_PREV_TRANSACTION_NO_COMPLETE);
-
+		var { account = '', retry = 0, timeout = 0 } = options;
+		var queue = this.m_transaction_queues[account];
 		var now = Date.now();
 
-		try {
-			self.m_prevSafeTransactionTime[account] = now;
+		retry = options.retry = Number(retry) || 0;
+		timeout = options.timeout = Number(timeout) || 0;
 
-			await self.beforeSafeTransaction();
-
-			this.trigger('SignTransaction');
-
-			var web3 = web3Instance(self);
-			var nonce = await self.getNonce(account);
-			var args = { web3, account, nonce };
-
-			var result = utils.isAsync(cb) ? await cb(args) : cb(args);
-			
-			return result;
-		} finally {
-			if (now == self.m_prevSafeTransactionTime[account]) {
-				self.m_prevSafeTransactionTime[account] = 0;
-			}
+		if (!queue) {
+			this.m_transaction_queues[account] = queue = new List();
 		}
+
+		return new Promise((resolve, reject)=>{
+			var tid = 0;
+			var setTimeout = time=>{
+				if (time) {
+					now = Date.now();
+					tid = (function() {
+						queue.del(item);
+						reject(Error.new(errno.ERR_TRANSACTION_TIMEOUT));
+					}).setTimeout(time);
+				}
+			};
+
+			var ctx = {
+				retry,
+				options,
+				exec: async (...args)=>{
+					if (tid)
+						clearTimeout(tid);
+					try {
+						resolve(await exec(...args));
+					} catch(err) {
+						if (ctx.retry--) {
+							if (timeout) {
+								timeout = timeout - Date.now() + now;
+								if (timeout <= 0) { // timeout
+									reject(err);
+								} else {
+									setTimeout(timeout);
+									item = queue.push(ctx); // retry back
+								}
+							} else {
+								queue.push(ctx); // retry back
+							}
+						} else {
+							reject(err);
+						}
+					}
+				},
+			};
+
+			setTimeout(timeout);
+
+			var item = queue.push(ctx);
+			if (queue.length == 1) {
+				dequeue(this, queue);
+			}
+		});
 	}
 
 	// Rewrite by method
