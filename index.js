@@ -161,7 +161,7 @@ async function dequeue(self, queue) {
  */
 class SafeWeb3 extends Notification {
 
-	constructor(url, defaultAccount = '') {
+	constructor(url, defaultAccount = '', safe_web3 = null) {
 		super();
 		this.m_url = url || 'http://127.0.0.1:8545';
 		this.m_prevSafeTransactionTime = {};
@@ -169,7 +169,7 @@ class SafeWeb3 extends Notification {
 		this.m_contract = {};
 		this.m_gasLimit = DEFAULT_GAS_LIMIT;
 		this.m_gasPrice = DEFAULT_GAS_PRICE;
-		this.m_transaction_queues = {};
+		this.m_transaction_queues = safe_web3 ? safe_web3.m_transaction_queues: {};
 	}
 
 	get gasLimit() {
