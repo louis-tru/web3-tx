@@ -148,7 +148,7 @@ async function dequeue(self, queue) {
 		var web3 = web3Instance(self);
 		var nonce = await self.getNonce(account);
 		var args = { web3, account, nonce, ctx: queue.list.shift() };
-		return await args.ctx.dequeue(args);
+		await args.ctx.dequeue(args);
 	} catch (err) {
 		console.error(err);
 		await utils.sleep(1e3); // sleep 1s
@@ -313,12 +313,13 @@ class SafeWeb3 extends Notification {
 	safeTransaction(exec, options = {}) {
 
 		var { account = '', retry = 0, timeout = 0 } = options;
-		var queue = this.m_transaction_queues[account];
-		var now = Date.now();
 
 		account = options.account = account || this.defaultAccount;
 		retry = options.retry = Number(retry) || 0;
 		timeout = options.timeout = Number(timeout) || 0;
+
+		var queue = this.m_transaction_queues[account];
+		var now = Date.now();
 
 		if (!queue) {
 			this.m_transaction_queues[account] = queue = { list: new List(), runing: 0 };
