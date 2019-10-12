@@ -30,8 +30,8 @@
 
 var utils = require('nxkit');
 var errno = require('./errno');
-var Web3Class = require('web3');
-var { Notification, List } = require('nxkit/event');
+var Web3 = require('web3');
+var { List } = require('nxkit/event');
 var _fix_web3 = require('./_fix_web3');
 
 var SAFE_TRANSACTION_MAX_TIMEOUT = 300 * 1e3;  // 180秒
@@ -46,7 +46,7 @@ var DEFAULT_GAS_PRICE = 1e5;
 function web3Instance(self) {
 	if (!self.m_web3) {
 		var url = self.m_url; // utils.config.ethereumPosNode;
-		var { HttpProvider, WebsocketProvider } = Web3Class.providers;
+		var { HttpProvider, WebsocketProvider } = Web3.providers;
 		var provider;
 		if (/^https?:/.test(url)) {
 			provider = new HttpProvider(url, { timeout: SAFE_TRANSACTION_MAX_TIMEOUT });
@@ -55,7 +55,7 @@ function web3Instance(self) {
 		} else {
 			throw Error(`Can't create 'Web3 provider`);
 		}
-		self.m_web3 = new Web3Class(provider);
+		self.m_web3 = new Web3(provider);
 		self.m_web3.eth.defaultAccount = self.defaultAccount;
 	}
 	return self.m_web3;
@@ -132,44 +132,16 @@ function createContract(self, address, abi, name = '') {
 }
 
 /**
- * @func dequeue()
- */
-async function dequeue(self, queue) {
-	var first = queue.list.first;
-	if (!first) {
-		queue.runing = 0;
-		return;
-	}
-	try {
-		var ctx = first.value;
-		var {account} = ctx.options;
-		await self.beforeSafeTransaction(ctx);
-		self.trigger('SignTransaction', ctx);
-		var web3 = web3Instance(self);
-		var nonce = await self.getNonce(account);
-		var args = { web3, account, nonce, ctx: queue.list.shift() };
-		await args.ctx.dequeue(args);
-	} catch (err) {
-		console.error(err);
-		await utils.sleep(1e3); // sleep 1s
-	}
-	dequeue(self, queue);
-}
-
-/**
  * @class SafeWeb3
  */
-class SafeWeb3 extends Notification {
+class SafeWeb3 {
 
-	constructor(url, defaultAccount = '', safe_web3 = null) {
-		super();
+	constructor(url, defaultAccount = '') {
 		this.m_url = url || 'http://127.0.0.1:8545';
-		this.m_prevSafeTransactionTime = {};
 		this.m_default_account = defaultAccount || '';
 		this.m_contract = {};
 		this.m_gasLimit = DEFAULT_GAS_LIMIT;
 		this.m_gasPrice = DEFAULT_GAS_PRICE;
-		this.m_transaction_queues = safe_web3 ? safe_web3.m_transaction_queues: {};
 	}
 
 	get gasLimit() {
@@ -307,14 +279,81 @@ class SafeWeb3 extends Notification {
 		});
 	}
 
+	// Rewrite by method
+
+	getDefaultAccount() {
+		return this.m_default_account;
+	}
+
+	async getBlockNumber() {
+		var web3 = web3Instance(this);
+		var blockNumber = await Promise.race([web3.eth.getBlockNumber(), utils.sleep(1e4, -1)]);
+		if (blockNumber == -1) {
+			throw Error.new(errno.ERR_REQUEST_TIMEOUT);
+		}
+		return blockNumber;
+	}
+
+	async getNonce(account = '') {
+		account = account || this.defaultAccount;
+		var web3 = web3Instance(this);
+		return await web3.eth.getTransactionCount(account, 'latest');
+	}
+
+	async sign(txData) {
+		throw Error.new(errno.ERR_METHOD_UNREALIZED);
+	}
+
+};
+
+/**
+ * @class TransactionQueue
+ */
+class TransactionQueue {
+
+	constructor(web3) {
+		this.m_seaf_web3 = web3;
+		this.m_transaction_queues = {};
+	}
+
+	get host() {
+		return this.m_seaf_web3;
+	}
+
+	async beforeDequeue() {
+	}
+
 	/**
-	 * @func safeTransaction(exec) 开始安全交易
+	 * @func _dequeue()
 	 */
-	safeTransaction(exec, options = {}) {
+	async _dequeue(queue) {
+		var first = queue.list.first;
+		if (!first) {
+			queue.runing = 0;
+			return;
+		}
+		try {
+			var ctx = first.value;
+			var {account} = ctx.options;
+			await this.beforeDequeue(ctx);
+			var nonce = await this.m_seaf_web3.getNonce(account);
+			var args = { account, nonce, ctx: queue.list.shift() };
+			await args.ctx.dequeue(args);
+		} catch (err) {
+			console.error(err);
+			await utils.sleep(1e3); // sleep 1s
+		}
+		this._dequeue(queue);
+	}
+
+	/**
+	 * @func enqueue(exec, options) 排队交易
+	 */
+	enqueue(exec, options = {}) {
 
 		var { account = '', retry = 0, timeout = 0 } = options;
 
-		account = options.account = account || this.defaultAccount;
+		account = options.account = account || this.m_seaf_web3.defaultAccount;
 		retry = options.retry = Number(retry) || 0;
 		timeout = options.timeout = Number(timeout) || 0;
 
@@ -369,39 +408,12 @@ class SafeWeb3 extends Notification {
 			var item = queue.list.push(ctx);
 			if (!queue.runing) {
 				queue.runing = 1;
-				dequeue(this, queue);
+				this._dequeue(queue);
 			}
 		});
 	}
 
-	// Rewrite by method
-
-	getDefaultAccount() {
-		return this.m_default_account;
-	}
-
-	async getBlockNumber() {
-		var web3 = web3Instance(this);
-		var blockNumber = await Promise.race([web3.eth.getBlockNumber(), utils.sleep(1e4, -1)]);
-		if (blockNumber == -1) {
-			throw Error.new(errno.ERR_REQUEST_TIMEOUT);
-		}
-		return blockNumber;
-	}
-
-	async getNonce(account = '') {
-		account = account || this.defaultAccount;
-		var web3 = web3Instance(this);
-		return await web3.eth.getTransactionCount(account, 'latest');
-	}
-
-	async sign(txData) {
-		throw Error.new(errno.ERR_METHOD_UNREALIZED);
-	}
-
-	async beforeSafeTransaction() {
-	}
-
-};
+}
 
 exports.SafeWeb3 = SafeWeb3;
+exports.TransactionQueue = TransactionQueue;
