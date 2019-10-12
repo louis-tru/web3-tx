@@ -135,15 +135,20 @@ function createContract(self, address, abi, name = '') {
  * @func dequeue()
  */
 async function dequeue(self, queue) {
-	var first = queue.first();
-	if (!first) return;
+	var first = queue.list.first;
+	if (!first) {
+		queue.runing = 0;
+		return;
+	}
 	try {
-		await self.beforeSafeTransaction(first.value);
-		this.trigger('SignTransaction', first.value);
+		var ctx = first.value;
+		var {account} = ctx.options;
+		await self.beforeSafeTransaction(ctx);
+		self.trigger('SignTransaction', ctx);
 		var web3 = web3Instance(self);
 		var nonce = await self.getNonce(account);
-		var args = { web3, account, nonce, context: queue.shift() };
-		return await args.context.exec(args);
+		var args = { web3, account, nonce, ctx: queue.list.shift() };
+		return await args.ctx.dequeue(args);
 	} catch (err) {
 		console.error(err);
 		await utils.sleep(1e3); // sleep 1s
@@ -306,17 +311,17 @@ class SafeWeb3 extends Notification {
 	 * @func safeTransaction(exec) 开始安全交易
 	 */
 	safeTransaction(exec, options = {}) {
-		account = account || this.defaultAccount;
 
 		var { account = '', retry = 0, timeout = 0 } = options;
 		var queue = this.m_transaction_queues[account];
 		var now = Date.now();
 
+		account = options.account = account || this.defaultAccount;
 		retry = options.retry = Number(retry) || 0;
 		timeout = options.timeout = Number(timeout) || 0;
 
 		if (!queue) {
-			this.m_transaction_queues[account] = queue = new List();
+			this.m_transaction_queues[account] = queue = { list: new List(), runing: 0 };
 		}
 
 		return new Promise((resolve, reject)=>{
@@ -325,7 +330,7 @@ class SafeWeb3 extends Notification {
 				if (time) {
 					now = Date.now();
 					tid = (function() {
-						queue.del(item);
+						queue.list.del(item);
 						reject(Error.new(errno.ERR_TRANSACTION_TIMEOUT));
 					}).setTimeout(time);
 				}
@@ -334,7 +339,7 @@ class SafeWeb3 extends Notification {
 			var ctx = {
 				retry,
 				options,
-				exec: async (...args)=>{
+				dequeue: async (...args)=>{
 					if (tid)
 						clearTimeout(tid);
 					try {
@@ -344,14 +349,13 @@ class SafeWeb3 extends Notification {
 							if (timeout) {
 								timeout = timeout - Date.now() + now;
 								if (timeout <= 0) { // timeout
-									reject(err);
+									return reject(err);
 								} else {
 									setTimeout(timeout);
-									item = queue.push(ctx); // retry back
 								}
-							} else {
-								queue.push(ctx); // retry back
 							}
+							console.error(err);
+							item = queue.list.push(ctx); // retry back
 						} else {
 							reject(err);
 						}
@@ -361,8 +365,9 @@ class SafeWeb3 extends Notification {
 
 			setTimeout(timeout);
 
-			var item = queue.push(ctx);
-			if (queue.length == 1) {
+			var item = queue.list.push(ctx);
+			if (!queue.runing) {
+				queue.runing = 1;
 				dequeue(this, queue);
 			}
 		});
