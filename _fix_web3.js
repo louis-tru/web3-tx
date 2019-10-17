@@ -14,7 +14,8 @@ function ConnectionTimeout(ms) {
 function InvalidResponse(result) {
 	// var message = !!result && !!result.error && !!result.error.message ? 
 	// result.error.message : 'Invalid JSON RPC response: ' + JSON.stringify(result);
-	return Object.assign(Error.new(errno.ERR_ETHEREUM_FAULT_ERROR), result);
+	console.error('InvalidResponse', result);
+	return Error.new(errno.ERR_ETHEREUM_FAULT_ERROR);
 }
 
 function ErrorResponse(result) {
