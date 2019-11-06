@@ -32,7 +32,10 @@ var utils = require('nxkit');
 var errno = require('./errno');
 var Web3 = require('web3');
 var { List } = require('nxkit/event');
-var _fix_web3 = require('./_fix_web3');
+
+// fix web3
+require('./_fix_contract');
+require('./_fix_web3');
 
 var SAFE_TRANSACTION_MAX_TIMEOUT = 300 * 1e3;  // 180秒
 var TRANSACTION_MAX_BLOCK_RANGE = 32;
