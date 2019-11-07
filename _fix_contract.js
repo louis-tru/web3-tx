@@ -1,5 +1,7 @@
 
 var Contract = require('web3-eth-contract');
+var _ = require('underscore');
+var utils = require('web3-utils');
 
 Contract.prototype._generateEventOptions = function() {
 	var args = Array.prototype.slice.call(arguments);
