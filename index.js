@@ -71,7 +71,9 @@ function createContract(self, address, abi, name = '') {
 	var account = self.defaultAccount;
 	var web3 = web3Instance(self);
 	var contract = new web3.eth.Contract(abi, address, { 
-		from: account, gas: self.gasLimit, gasLimit: self.gasLimit,
+		from: account, 
+		// TODO pos相夫本节点配置了这个"gas"参数所有协约get rpc请求均不能访问
+		/*gas: self.gasLimit, gasLimit: self.gasLimit,*/
 	});
 
 	/**
