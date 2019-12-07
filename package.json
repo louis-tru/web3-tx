@@ -1,11 +1,11 @@
 {
 	"name": "safe-tx",
-	"version": "0.1.45",
+	"version": "0.1.46",
 	"description": "",
 	"main": "index.js",
 	"author": "louistru@hotmail.com",
 	"dependencies": {
-		"nxkit": "~0.9.37",
+		"nxkit": "~0.9.38",
 		"web3": "1.0.0-beta.37"
 	}
 }
