@@ -64,7 +64,9 @@ function send(payload, callback) {
 	}
 };
 
-if (package_json.dependencies.web3 == '1.0.0-beta.37') {
+var web3_version = package_json.dependencies.web3;
+
+if (web3_version == '1.0.0-beta.37' || web3_version.indexOf('1.2.4') != 0) {
 
 	var errors = require('web3-core-helpers').errors;
 	var HttpProvider = require('web3-providers-http');
