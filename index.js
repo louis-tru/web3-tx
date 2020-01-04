@@ -170,7 +170,13 @@ class SafeWeb3 {
 	}
 
 	get defaultAccount() {
-		return this.getDefaultAccount();
+		return this.m_default_account;
+	}
+
+	set defaultAccount(account) {
+		this.m_default_account = account;
+		if (this.m_web3)
+			this.m_web3.eth.defaultAccount = account;
 	}
 
 	createContract(address, abi, name = '') {
@@ -285,10 +291,6 @@ class SafeWeb3 {
 	}
 
 	// Rewrite by method
-
-	getDefaultAccount() {
-		return this.m_default_account;
-	}
 
 	async getBlockNumber() {
 		var web3 = web3Instance(this);
