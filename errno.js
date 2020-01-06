@@ -1,5 +1,5 @@
 
-var errno = require('nxkit/errno');
+var errno = require('nxkit/errno').default;
 
 module.exports = {
 	...errno,

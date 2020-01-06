@@ -28,7 +28,7 @@
  *
  * ***** END LICENSE BLOCK ***** */
 
-var utils = require('nxkit');
+var utils = require('nxkit').default;
 var errno = require('./errno');
 var Web3 = require('web3');
 var { List } = require('nxkit/event');

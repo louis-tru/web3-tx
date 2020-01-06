@@ -4,7 +4,6 @@
  */
 
 var errno = require('./errno');
-var utils = require('nxkit');
 var package_json = require('./package');
 
 function ConnectionTimeout(ms) {
