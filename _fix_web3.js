@@ -22,8 +22,8 @@ function ErrorResponse(result) {
 	// 	result.error.message : JSON.stringify(result);
 	result = result || {};
 	var err = result.error ? result.error: result;
-	err.rpcCode = err.code || -1;
-	if (err.rpcCode == -32065) { // timeout
+	err.errno = err.code || -30000;
+	if (err.errno == -32065) { // timeout
 		err.errno = errno.ERR_REQUEST_TIMEOUT[0];
 		return Error.new(err);
 	} else {
