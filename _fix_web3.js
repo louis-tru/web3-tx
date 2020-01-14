@@ -23,8 +23,9 @@ function ErrorResponse(result) {
 	result = result || {};
 	var err = result.error ? result.error: result;
 	err.rpcCode = err.code || -1;
-	if (err.rpcCode == -32065) {
-		return Error.new(err, errno.ERR_REQUEST_TIMEOUT[0]);
+	if (err.rpcCode == -32065) { // timeout
+		err.errno = errno.ERR_REQUEST_TIMEOUT[0];
+		return Error.new(err);
 	} else {
 		return Error.new(err);
 	}
