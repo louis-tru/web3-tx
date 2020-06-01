@@ -14,23 +14,25 @@ Contract.prototype._generateEventOptions = function() {
 
 	var eventName = (_.isString(args[0])) ? args[0] : 'allevents';
 	var event = (eventName.toLowerCase() === 'allevents') ? {
-					name: 'ALLEVENTS',
-					jsonInterface: this.options.jsonInterface
-			} : this.options.jsonInterface.find(function (json) {
-					return (json.type === 'event' && (json.name === eventName || json.signature === '0x'+ eventName.replace('0x','')));
-			});
+				name: 'ALLEVENTS',
+				jsonInterface: this.options.jsonInterface
+	} : this.options.jsonInterface.find(function (json: any) {
+		return (json.type === 'event' && (json.name === eventName || json.signature === '0x'+ eventName.replace('0x','')));
+	});
 
 	if (!event) {
-			throw new Error('Event "' + eventName + '" doesn\'t exist in this contract.');
+		throw new Error('Event "' + eventName + '" doesn\'t exist in this contract.');
 	}
 
 	if (!utils.isAddress(this.options.address)) {
-			throw new Error('This contract object doesn\'t have address set yet, please set an address first.');
+		throw new Error('This contract object doesn\'t have address set yet, please set an address first.');
 	}
 
 	return {
-			params: this._encodeEventABI(event, options),
-			event: event,
-			callback: callback
+		params: this._encodeEventABI(event, options),
+		event: event,
+		callback: callback
 	};
 };
+
+export {}

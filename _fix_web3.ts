@@ -3,21 +3,21 @@
  * @date 2018-06-14
  */
 
-var errno = require('./errno');
-var package_json = require('./package');
+import 'nxkit';
+import errno from './errno';
 
-function ConnectionTimeout(ms) {
+function ConnectionTimeout() {
 	return Error.new(errno.ERR_REQUEST_TIMEOUT);
-};
+}
 
-function InvalidResponse(result) {
+function InvalidResponse(result: any) {
 	// var message = !!result && !!result.error && !!result.error.message ? 
 	// result.error.message : 'Invalid JSON RPC response: ' + JSON.stringify(result);
 	console.error('InvalidResponse', result);
 	return Error.new(errno.ERR_ETHEREUM_FAULT_ERROR);
 }
 
-function ErrorResponse(result) {
+function ErrorResponse(result: any) {
 	// var message = !!result && !!result.error && !!result.error.message ? 
 	// 	result.error.message : JSON.stringify(result);
 	result = result || {};
@@ -31,7 +31,7 @@ function ErrorResponse(result) {
 	}
 }
 
-function send(payload, callback) {
+function send(this: any, payload: any, callback: (err?: any, data?: any)=>void) {
 	var _this = this;
 	var request = this._prepareRequest();
 	var complete = false;
@@ -64,16 +64,12 @@ function send(payload, callback) {
 	}
 };
 
-var web3_version = package_json.dependencies.web3;
+var errors = require('web3-core-helpers').errors;
+var HttpProvider = require('web3-providers-http');
 
-if (web3_version == '1.0.0-beta.37' || web3_version.indexOf('1.2.4') != 0) {
+errors.ConnectionTimeout = ConnectionTimeout;
+errors.InvalidResponse = InvalidResponse;
+errors.ErrorResponse = ErrorResponse;
+HttpProvider.prototype.send = send;
 
-	var errors = require('web3-core-helpers').errors;
-	var HttpProvider = require('web3-providers-http');
-
-	errors.ConnectionTimeout = ConnectionTimeout;
-	errors.InvalidResponse = InvalidResponse;
-	errors.ErrorResponse = ErrorResponse;
-	HttpProvider.prototype.send = send;
-}
-
+export {}
