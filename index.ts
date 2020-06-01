@@ -159,9 +159,11 @@ export interface ContractOptions {
 }
 
 export interface Contract {
+	readonly address: string;
 	readonly options: ContractOptions;
 	readonly methods: { [method: string]: ContractMethod };
 	getPastEvents(event: string, options?: any): Promise<TransactionEvent[]>;
+	findEvent(event: string, blockNumber: number, transactionHash: string): Promise<FindEventResult | null>;
 }
 
 export interface __Web3__ {
@@ -198,6 +200,7 @@ export interface ABIDef {
 export interface IWeb3 {
 	defaultAccount: string;
 	createContract(address: string, abi: any[], name?: string): Contract;
+	contract(address: string): Promise<Contract>;
 	sendSignTransaction(signatureData: SignatureData, options?: SSTOptions): Promise<TransactionReceipt>;
 	getBlockNumber(): Promise<number>;
 	getNonce(account?: string): Promise<number>;
@@ -275,6 +278,9 @@ export abstract class Web3 implements IWeb3 {
 			/*gas: self.gasLimit, gasLimit: self.gasLimit,*/
 		});
 
+		(contract as any).address = address;
+		contract.findEvent = (event: string, blockNumber: number, hash: string)=>this._findEvent(contract, event, blockNumber, hash);
+
 		/**
 		 * @func signTx(param) 对交易进行签名
 		 */
@@ -338,6 +344,72 @@ export abstract class Web3 implements IWeb3 {
 			contract = this.createContract(address, abi);
 		}
 		return contract;
+	}
+
+	private async _findEvent(contract: Contract, eventName: string, blockNumber: number, transactionHash: string): Promise<FindEventResult | null> {
+		var j = 10;
+
+		while (j--) { // 确保本块已同步
+			var num = await this.__.eth.getBlockNumber();
+			if (num >= blockNumber) {
+				break;
+			}
+			await utils.sleep(1e4); // 10s
+		}
+
+		j = 10;
+
+		// read event data
+		var tx: Transaction | null = null;
+		var transactionIndex: number;
+		var event: TransactionEvent | undefined;
+		var events: TransactionEvent[];
+
+		while (j--) { // 重试10次,10次后仍然不能从链上查询到txid,丢弃
+			try {
+				var block = await this.__.eth.getBlock(blockNumber);// as Transaction[];
+				if (block) {
+					var transactions = block.transactions as string[];
+					var transactionIndex = transactions.indexOf(transactionHash);
+					if (transactionIndex != -1) {
+						if ( (tx = await this.__.eth.getTransactionFromBlock(blockNumber, transactionIndex)) )
+							break;
+					}
+				}
+				return null;
+			} catch(err) {
+				if (j) await utils.sleep(1e3); else throw err; // 1s
+			}
+		}
+
+		if (!tx)
+			return null;
+
+		var transaction = tx
+		// var contract = await this.contract(transaction.to);
+
+		j = 10;
+
+		while (j--) {
+			try {
+				events = await contract.getPastEvents(eventName, {
+					fromBlock: blockNumber, toBlock: blockNumber,
+				});
+				if (events.some(e=>e.transactionHash)) { // have transactionHash
+					event = events.find(e=>e.transactionHash==transactionHash);
+				} else {
+					event = events.find(e=>e.blockHash==transaction.blockHash&&e.transactionIndex==transactionIndex);
+				}
+				return { event: event as TransactionEvent, transaction };
+			} catch(err) {
+				if (j)
+					await utils.sleep(1e3);
+				else
+					console.error(err); //throw err; // 1s
+			}
+		}
+
+		return null;
 	}
 
 	/**
@@ -446,72 +518,6 @@ export abstract class Web3 implements IWeb3 {
 
 	abstract abi(address: string): Promise<ABIDef>;
 	abstract sign(txData: SignOptions): Promise<SignatureData> | SignatureData;
-
-	async findEvent(eventName: string, blockNumber: number, transactionHash: string): Promise<FindEventResult | null> {
-		var j = 10;
-
-		while (j--) { // 确保本块已同步
-			var num = await this.__.eth.getBlockNumber();
-			if (num >= blockNumber) {
-				break;
-			}
-			await utils.sleep(1e4); // 10s
-		}
-
-		j = 10;
-
-		// read event data
-		var tx: Transaction | null = null;
-		var transactionIndex: number;
-		var event: TransactionEvent | undefined;
-		var events: TransactionEvent[];
-
-		while (j--) { // 重试10次,10次后仍然不能从链上查询到txid,丢弃
-			try {
-				var block = await this.__.eth.getBlock(blockNumber);// as Transaction[];
-				if (block) {
-					var transactions = block.transactions as string[];
-					var transactionIndex = transactions.indexOf(transactionHash);
-					if (transactionIndex != -1) {
-						if ( (tx = await this.__.eth.getTransactionFromBlock(blockNumber, transactionIndex)) )
-							break;
-					}
-				}
-				return null;
-			} catch(err) {
-				if (j) await utils.sleep(1e3); else throw err; // 1s
-			}
-		}
-
-		if (!tx)
-			return null;
-
-		var transaction = tx
-		var contract = await this.contract(transaction.to);
-
-		j = 10;
-
-		while (j--) {
-			try {
-				events = await contract.getPastEvents(eventName, {
-					fromBlock: blockNumber, toBlock: blockNumber,
-				});
-				if (events.some(e=>e.transactionHash)) { // have transactionHash
-					event = events.find(e=>e.transactionHash==transactionHash);
-				} else {
-					event = events.find(e=>e.blockHash==transaction.blockHash&&e.transactionIndex==transactionIndex);
-				}
-				return { event: event as TransactionEvent, transaction };
-			} catch(err) {
-				if (j)
-					await utils.sleep(1e3);
-				else
-					console.error(err); //throw err; // 1s
-			}
-		}
-
-		return null;
-	}
 
 	// Rewrite by method
 
