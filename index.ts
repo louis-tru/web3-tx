@@ -158,8 +158,7 @@ export interface ContractOptions {
 	gas?: number; // - Number: The maximum gas provided for a transaction (gas limit).
 }
 
-export interface Contract {
-	readonly address: string;
+export interface Contract extends Dict {
 	readonly options: ContractOptions;
 	readonly methods: { [method: string]: ContractMethod };
 	getPastEvents(event: string, options?: any): Promise<TransactionEvent[]>;
@@ -200,7 +199,6 @@ export interface ABIDef {
 export interface IWeb3 {
 	defaultAccount: string;
 	createContract(address: string, abi: any[], name?: string): Contract;
-	contract(address: string): Promise<Contract>;
 	sendSignTransaction(signatureData: SignatureData, options?: SSTOptions): Promise<TransactionReceipt>;
 	getBlockNumber(): Promise<number>;
 	getNonce(account?: string): Promise<number>;
@@ -210,7 +208,6 @@ export interface IWeb3 {
 export abstract class Web3 implements IWeb3 {
 	private _url: string;
 	private _default_account: string;
-	private _contract: Dict<Contract> = {};
 	private _gasLimit = DEFAULT_GAS_LIMIT;
 	private _gasPrice = DEFAULT_GAS_PRICE;
 	private __web3__?: __Web3__;
@@ -268,17 +265,12 @@ export abstract class Web3 implements IWeb3 {
 	createContract(address: string, abi: any[]) {
 		var self = this;
 		var account = self.defaultAccount;
-		var contract = this._contract[address];
-		if (contract)
-			return contract;
-
-		contract = new self.__.eth.Contract(abi, address, { 
+		var contract = new self.__.eth.Contract(abi, address, { 
 			from: account, 
 			// TODO pos相夫本节点配置了这个"gas"参数所有协约get rpc请求均不能访问
 			/*gas: self.gasLimit, gasLimit: self.gasLimit,*/
 		});
 
-		(contract as any).address = address;
 		contract.findEvent = (event: string, blockNumber: number, hash: string)=>this._findEvent(contract, event, blockNumber, hash);
 
 		/**
@@ -332,18 +324,7 @@ export abstract class Web3 implements IWeb3 {
 			};
 		});
 
-		self._contract[address] = contract;
-
 		return contract as Contract;
-	}
-
-	async contract(address: string): Promise<Contract> {
-		var contract = this._contract[address];
-		if (!contract) {
-			var {address,abi} = await this.abi(address);
-			contract = this.createContract(address, abi);
-		}
-		return contract;
 	}
 
 	private async _findEvent(contract: Contract, eventName: string, blockNumber: number, transactionHash: string): Promise<FindEventResult | null> {
@@ -516,7 +497,6 @@ export abstract class Web3 implements IWeb3 {
 		});
 	}
 
-	abstract abi(address: string): Promise<ABIDef>;
 	abstract sign(txData: SignOptions): Promise<SignatureData> | SignatureData;
 
 	// Rewrite by method
