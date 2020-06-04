@@ -38,7 +38,7 @@ const __Web3__ = require('web3');
 
 const SAFE_TRANSACTION_MAX_TIMEOUT = 300 * 1e3;  // 180秒
 const TRANSACTION_MAX_BLOCK_RANGE = 32;
-const TRANSACTION_CHECK_TIME = 3e4; // 3秒
+const TRANSACTION_CHECK_TIME = 3e4; // 30秒
 const DEFAULT_GAS_LIMIT = 1e8;
 const DEFAULT_GAS_PRICE = 1e5;
 
@@ -381,7 +381,7 @@ export abstract class Web3 implements IWeb3 {
 				} else {
 					event = events.find(e=>e.blockHash==transaction.blockHash&&e.transactionIndex==transactionIndex);
 				}
-				return { event: event as TransactionEvent, transaction };
+				return event ? { event: event as TransactionEvent, transaction }: null;
 			} catch(err) {
 				if (j)
 					await utils.sleep(1e3);
