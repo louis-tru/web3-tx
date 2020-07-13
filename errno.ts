@@ -1,5 +1,5 @@
 
-import {ErrnoList as BaseErrnoList} from 'nxkit/errno'
+import {ErrnoList as BaseErrnoList} from 'somes/errno'
 
 export class ErrnoList extends BaseErrnoList {
 	ERR_ETHEREUM_FAULT_ERROR: ErrnoCode = [100235, '以太坊设备故障', '以太坊设备致命故障']

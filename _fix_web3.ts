@@ -3,7 +3,7 @@
  * @date 2018-06-14
  */
 
-import 'nxkit';
+import 'somes';
 import errno from './errno';
 
 function ConnectionTimeout() {

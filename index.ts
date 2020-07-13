@@ -28,9 +28,9 @@
  *
  * ***** END LICENSE BLOCK ***** */
 
-import utils from 'nxkit';
+import utils from 'somes';
 import errno from './errno';
-import { List } from 'nxkit/event';
+import { List } from 'somes/event';
 import './_fix_contract';
 import './_fix_web3';
 
