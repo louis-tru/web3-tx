@@ -1,12 +1,12 @@
 {
-	"name": "web3kit",
-	"version": "1.1.8",
+	"name": "web3x",
+	"version": "1.2.0",
 	"description": "",
 	"main": "index.js",
 	"types": "index.ts",
 	"author": "louistru@hotmail.com",
 	"scripts": {
-		"build": "tsc && cp LICENSE *.md out/web3kit && node _.js"
+		"build": "tsc && cp LICENSE *.md out/web3x && node _.js"
 	},
 	"devDependencies": {
 		"@types/node": "~12.12.20"

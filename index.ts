@@ -33,8 +33,17 @@ import errno from './errno';
 import { List } from 'somes/event';
 import './_fix_contract';
 import './_fix_web3';
+import Web3 from 'web3';
+import {Contract as ContractRaw, Options as ContractOptions, 
+	EventData, CallOptions as MethodOptions, ContractSendMethod as ContractSendMethodRaw } from 'web3-eth-contract';
+import {Transaction,TransactionReceipt} from 'web3-core';
+import {BlockTransactionString as Block} from 'web3-eth';
+
+export { Web3, ContractOptions, EventData, Transaction, TransactionReceipt, Block, MethodOptions };
 
 const __Web3__ = require('web3');
+
+(exports as any).Web3 = __Web3__;
 
 const SAFE_TRANSACTION_MAX_TIMEOUT = 300 * 1e3;  // 180秒
 const TRANSACTION_MAX_BLOCK_RANGE = 32;
@@ -42,73 +51,89 @@ const TRANSACTION_CHECK_TIME = 3e4; // 30秒
 const DEFAULT_GAS_LIMIT = 1e8;
 const DEFAULT_GAS_PRICE = 1e5;
 
-export interface Transaction {
-	hash: string;// 32 Bytes - String: Hash of the transaction.
-	nonce: number;// - Number: The number of transactions made by the sender prior to this one.
-	blockHash: string;// 32 Bytes - String: Hash of the block where this transaction was in. null when its pending.
-	blockNumber: number;// - Number: Block number where this transaction was in. null when its pending.
-	transactionIndex: number;// - Number: Integer of the transactions index position in the block. null when its pending.
-	from: string;// - String: Address of the sender.
-	to: string;// - String: Address of the receiver. null when its a contract creation transaction.
-	value: string;// - String: Value transferred in wei.
-	gasPrice: string;// - String: Gas price provided by the sender in wei.
-	gas: number;// - Number: Gas provided by the sender.
-	input: string;// - String: The data sent along with the transaction.
-}
+// export interface Transaction {
+// 	hash: string;// 32 Bytes - String: Hash of the transaction.
+// 	nonce: number;// - Number: The number of transactions made by the sender prior to this one.
+// 	blockHash: string;// 32 Bytes - String: Hash of the block where this transaction was in. null when its pending.
+// 	blockNumber: number;// - Number: Block number where this transaction was in. null when its pending.
+// 	transactionIndex: number;// - Number: Integer of the transactions index position in the block. null when its pending.
+// 	from: string;// - String: Address of the sender.
+// 	to: string;// - String: Address of the receiver. null when its a contract creation transaction.
+// 	value: string;// - String: Value transferred in wei.
+// 	gasPrice: string;// - String: Gas price provided by the sender in wei.
+// 	gas: number;// - Number: Gas provided by the sender.
+// 	input: string;// - String: The data sent along with the transaction.
+// }
 
-export interface TransactionReceipt {
-	status: boolean; // Boolean: TRUE if the transaction was successful, FALSE, if the EVM reverted the transaction.
-	blockHash: string; // 32 Bytes - String: Hash of the block where this transaction was in.
-	blockNumber: number; // Number: Block number where this transaction was in.
-	transactionHash: string; // 32 Bytes - String: Hash of the transaction.
-	transactionIndex: number; // Number: Integer of the transactions index position in the block.
-	from: string; // String: Address of the sender.
-	to: string; // String: Address of the receiver. null when its a contract creation transaction.
-	contractAddress: string; // String: The contract address created, if the transaction was a contract creation, otherwise null.
-	cumulativeGasUsed: number; // Number: The total amount of gas used when this transaction was executed in the block.
-	gasUsed: number; // Number: The amount of gas used by this specific transaction alone.
-	logs: string[]; // Array: Array of log objects, which this transaction generated.
-}
+// export interface TransactionReceipt {
+// 	status: boolean; // Boolean: TRUE if the transaction was successful, FALSE, if the EVM reverted the transaction.
+// 	blockHash: string; // 32 Bytes - String: Hash of the block where this transaction was in.
+// 	blockNumber: number; // Number: Block number where this transaction was in.
+// 	transactionHash: string; // 32 Bytes - String: Hash of the transaction.
+// 	transactionIndex: number; // Number: Integer of the transactions index position in the block.
+// 	from: string; // String: Address of the sender.
+// 	to: string; // String: Address of the receiver. null when its a contract creation transaction.
+// 	contractAddress: string; // String: The contract address created, if the transaction was a contract creation, otherwise null.
+// 	cumulativeGasUsed: number; // Number: The total amount of gas used when this transaction was executed in the block.
+// 	gasUsed: number; // Number: The amount of gas used by this specific transaction alone.
+// 	logs: string[]; // Array: Array of log objects, which this transaction generated.
+// }
 
-export interface TransactionEvent {
-	event: string; // String: The event name.
-	signature: string | null; // String|Null: The event signature, null if it’s an anonymous event.
-	address: string; // String: Address this event originated from.
-	returnValues: Dict; // Object: The return values coming from the event, e.g. {myVar: 1, myVar2: '0x234...'}.
-	logIndex: number; // Number: Integer of the event index position in the block.
-	transactionIndex: number; // Number: Integer of the transaction’s index position the event was created in.
-	transactionHash: string; // 32 Bytes - String: Hash of the transaction this event was created in.
-	blockHash: string; // 32 Bytes - String: Hash of the block this event was created in. null when it’s still pending.
-	blockNumber: number; // Number: The block number this log was created in. null when still pending.
-	raw: {
-		data: string; // String: The data containing non-indexed log parameter.
-		topics: string[]; // Array: An array with max 4 32 Byte topics, topic 1-3 contains indexed
-	};
-}
+// export interface EventData {
+// 	event: string; // String: The event name.
+// 	signature: string | null; // String|Null: The event signature, null if it’s an anonymous event.
+// 	address: string; // String: Address this event originated from.
+// 	returnValues: Dict; // Object: The return values coming from the event, e.g. {myVar: 1, myVar2: '0x234...'}.
+// 	logIndex: number; // Number: Integer of the event index position in the block.
+// 	transactionIndex: number; // Number: Integer of the transaction’s index position the event was created in.
+// 	transactionHash: string; // 32 Bytes - String: Hash of the transaction this event was created in.
+// 	blockHash: string; // 32 Bytes - String: Hash of the block this event was created in. null when it’s still pending.
+// 	blockNumber: number; // Number: The block number this log was created in. null when still pending.
+// 	raw: {
+// 		data: string; // String: The data containing non-indexed log parameter.
+// 		topics: string[]; // Array: An array with max 4 32 Byte topics, topic 1-3 contains indexed
+// 	};
+// }
 
-export interface Block {
-	number: number; // - Number: The block number. null when its pending block.
-	hash: string; // 32 Bytes - String: Hash of the block. null when its pending block.
-	parentHash: string; // 32 Bytes - String: Hash of the parent block.
-	nonce: number; // 8 Bytes - String: Hash of the generated proof-of-work. null when its pending block.
-	sha3Uncles: string; // 32 Bytes - String: SHA3 of the uncles data in the block.
-	logsBloom: string; // 256 Bytes - String: The bloom filter for the logs of the block. null when its pending block.
-	transactionsRoot: string; // 32 Bytes - String: The root of the transaction trie of the block
-	stateRoot: string; // 32 Bytes - String: The root of the final state trie of the block.
-	miner: string; // - String: The address of the beneficiary to whom the mining rewards were given.
-	difficulty: string; // - String: Integer of the difficulty for this block.
-	totalDifficulty: string; // - String: Integer of the total difficulty of the chain until this block.
-	extraData: string; // - String: The “extra data” field of this block.
-	size: number; // - Number: Integer the size of this block in bytes.
-	gasLimit: number; // - Number: The maximum gas allowed in this block.
-	gasUsed: number; // - Number: The total used gas by all transactions in this block.
-	timestamp: number; // - Number: The unix timestamp for when the block was collated.
-	transactions: (string /*| Transaction*/)[]; // - Array: Array of transaction objects, or 32 Bytes transaction hashes depending on the returnTransactionObjects parameter.
-	uncles: string[]; // - Array: Array of uncle hashes.
-}
+// export interface Block {
+// 	number: number; // - Number: The block number. null when its pending block.
+// 	hash: string; // 32 Bytes - String: Hash of the block. null when its pending block.
+// 	parentHash: string; // 32 Bytes - String: Hash of the parent block.
+// 	nonce: number; // 8 Bytes - String: Hash of the generated proof-of-work. null when its pending block.
+// 	sha3Uncles: string; // 32 Bytes - String: SHA3 of the uncles data in the block.
+// 	logsBloom: string; // 256 Bytes - String: The bloom filter for the logs of the block. null when its pending block.
+// 	transactionsRoot: string; // 32 Bytes - String: The root of the transaction trie of the block
+// 	stateRoot: string; // 32 Bytes - String: The root of the final state trie of the block.
+// 	miner: string; // - String: The address of the beneficiary to whom the mining rewards were given.
+// 	difficulty: string; // - String: Integer of the difficulty for this block.
+// 	totalDifficulty: string; // - String: Integer of the total difficulty of the chain until this block.
+// 	extraData: string; // - String: The “extra data” field of this block.
+// 	size: number; // - Number: Integer the size of this block in bytes.
+// 	gasLimit: number; // - Number: The maximum gas allowed in this block.
+// 	gasUsed: number; // - Number: The total used gas by all transactions in this block.
+// 	timestamp: number; // - Number: The unix timestamp for when the block was collated.
+// 	transactions: (string /*| Transaction*/)[]; // - Array: Array of transaction objects, or 32 Bytes transaction hashes depending on the returnTransactionObjects parameter.
+// 	uncles: string[]; // - Array: Array of uncle hashes.
+// }
+
+// export interface ContractOptions {
+// 	address: string; // - String: The address where the contract is deployed. See options.address.
+// 	jsonInterface?: string[]; // - Array: The json interface of the contract. See options.jsonInterface.
+// 	data?: string; // - String: The byte code of the contract. Used when the contract gets deployed.
+// 	from?: string; // - String: The address transactions should be made from.
+// 	gasPrice?: string; // - String: The gas price in wei to use for transactions.
+// 	gas?: number; // - Number: The maximum gas provided for a transaction (gas limit).
+// }
+
+// export interface MethodOptions {
+// 	from?: string; // - String (optional): The address the call “transaction” should be made from.
+// 	gas?: number; // - Number (optional): The maximum gas provided for this call “transaction” (gas limit).
+// 	value?: number|string|bigint;
+// 	gasPrice?: string; // - String (optional): The gas price in wei to use for this call “transaction”.
+// }
 
 export interface FindEventResult {
-	event: TransactionEvent;
+	event: EventData;
 	transaction: Transaction;
 }
 
@@ -130,56 +155,17 @@ export interface SignOptions extends SSTOptions {
 	data?: any;
 }
 
-export interface MethodOptions {
-	from?: string; // - String (optional): The address the call “transaction” should be made from.
-	gas?: number; // - Number (optional): The maximum gas provided for this call “transaction” (gas limit).
-	value?: number|string|bigint;
-	gasPrice?: string; // - String (optional): The gas price in wei to use for this call “transaction”.
-}
-
-export interface ContractMethodCallContext {
-	call(options?: MethodOptions): Promise<any>;
-	estimateGas(options?: MethodOptions): Promise<number>;
-	encodeABI(): string;
+export interface ContractSendMethod extends ContractSendMethodRaw {
 	sign(options?: SignOptions): Promise<SignatureData>;
 	sendSignTransaction(options?: SignOptions): Promise<TransactionReceipt>;
 }
 
 export interface ContractMethod {
-	<A extends any[]>(...args: A): ContractMethodCallContext;
+	<A extends any[]>(...args: A): ContractSendMethod;
 }
 
-export interface ContractOptions {
-	address: string; // - String: The address where the contract is deployed. See options.address.
-	jsonInterface?: string[]; // - Array: The json interface of the contract. See options.jsonInterface.
-	data?: string; // - String: The byte code of the contract. Used when the contract gets deployed.
-	from?: string; // - String: The address transactions should be made from.
-	gasPrice?: string; // - String: The gas price in wei to use for transactions.
-	gas?: number; // - Number: The maximum gas provided for a transaction (gas limit).
-}
-
-export interface Contract extends Dict {
-	readonly options: ContractOptions;
-	readonly methods: { [method: string]: ContractMethod };
-	getPastEvents(event: string, options?: any): Promise<TransactionEvent[]>;
+export interface Contract extends ContractRaw {
 	findEvent(event: string, blockNumber: number, transactionHash: string): Promise<FindEventResult | null>;
-}
-
-export interface __Web3__ {
-	readonly eth: {
-		getBlock(block: number): Promise<Block | null>;
-		getBlockNumber(): Promise<number>;
-		getTransactionFromBlock(blockNumber: number, transactionIndex: number): Promise<Transaction>;
-		getBalance(address: string): Promise<string>;
-		getTransaction(transactionHash: string): Promise<Transaction>;
-		getTransactionReceipt(txHash: string): Promise<TransactionReceipt>;
-		getTransactionCount(address: string, arg?: string): Promise<number>;
-		getBlockTransactionCount(blockHashOrBlockNumber: string | number): Promise<number>;
-		sendSignedTransaction(signatureData: string): Promise<TransactionReceipt>;
-		getCode(address: string, defaultBlock?: number|string): Promise<string>;// [, defaultBlock] [, callback])
-		readonly Contract: any;
-		defaultAccount: string;
-	}
 }
 
 export interface SignatureData {
@@ -196,7 +182,7 @@ export interface ABIDef {
 	abi: any[];
 }
 
-export interface IWeb3 {
+export interface IWeb3X {
 	defaultAccount: string;
 	createContract(address: string, abi: any[], name?: string): Contract;
 	sendSignTransaction(signatureData: SignatureData, options?: SSTOptions): Promise<TransactionReceipt>;
@@ -205,12 +191,12 @@ export interface IWeb3 {
 	sign(options: SignOptions): Promise<SignatureData> | SignatureData;
 }
 
-export abstract class Web3 implements IWeb3 {
+export abstract class Web3X implements IWeb3X {
 	private _url: string;
 	private _default_account: string;
 	private _gasLimit = DEFAULT_GAS_LIMIT;
 	private _gasPrice = DEFAULT_GAS_PRICE;
-	private __web3__?: __Web3__;
+	private __web3__?: Web3;
 
 	constructor(url: string, defaultAccount = '') {
 		this._url = url || 'http://127.0.0.1:8545';
@@ -259,7 +245,7 @@ export abstract class Web3 implements IWeb3 {
 			__web3__.eth.defaultAccount = this.defaultAccount;
 			this.__web3__ = __web3__;
 		}
-		return this.__web3__ as __Web3__;
+		return this.__web3__ as Web3;
 	}
 
 	createContract(address: string, abi: any[]) {
@@ -269,14 +255,14 @@ export abstract class Web3 implements IWeb3 {
 			from: account, 
 			// TODO pos相夫本节点配置了这个"gas"参数所有协约get rpc请求均不能访问
 			/*gas: self.gasLimit, gasLimit: self.gasLimit,*/
-		});
+		}) as Contract;
 
 		contract.findEvent = (event: string, blockNumber: number, hash: string)=>this._findEvent(contract, event, blockNumber, hash);
 
 		/**
 		 * @func signTx(param) 对交易进行签名
 		 */
-		async function signTx(ctx: ContractMethodCallContext, opts?: SignOptions): Promise<SignatureData> { //
+		async function signTx(ctx: ContractSendMethod, opts?: SignOptions): Promise<SignatureData> { //
 			var data = ctx.encodeABI();
 			var gasLimit = self.gasLimit;
 			var gasPrice = self.gasPrice + utils.random(0, 1000);
@@ -296,7 +282,7 @@ export abstract class Web3 implements IWeb3 {
 		/**
 		 * @func sendSignTransaction(param) 对交易进行签名并发送
 		 */
-		function Inl_sendSignTransaction(ctx: ContractMethodCallContext, opts?: SignOptions): Promise<TransactionReceipt> {
+		function Inl_sendSignTransaction(ctx: ContractSendMethod, opts?: SignOptions): Promise<TransactionReceipt> {
 			return new Promise(async function(resolve, reject) {
 				try {
 					var signatureData = await signTx(ctx, opts); // sign Transaction data
@@ -317,7 +303,7 @@ export abstract class Web3 implements IWeb3 {
 			var { methods } = contract;
 			var raw = methods[name];
 			methods[name] = (...args: any[])=>{
-				var ctx = raw.call(methods, ...args) as ContractMethodCallContext;
+				var ctx = raw.call(methods, ...args) as ContractSendMethod;
 				ctx.sign = e=>signTx(ctx, e);
 				ctx.sendSignTransaction = e=>Inl_sendSignTransaction(ctx, e);
 				return ctx;
@@ -343,8 +329,8 @@ export abstract class Web3 implements IWeb3 {
 		// read event data
 		var tx: Transaction | null = null;
 		var transactionIndex: number;
-		var event: TransactionEvent | undefined;
-		var events: TransactionEvent[];
+		var event: EventData | undefined;
+		var events: EventData[];
 
 		while (j--) { // 重试10次,10次后仍然不能从链上查询到txid,丢弃
 			try {
@@ -381,7 +367,7 @@ export abstract class Web3 implements IWeb3 {
 				} else {
 					event = events.find(e=>e.blockHash==transaction.blockHash&&e.transactionIndex==transactionIndex);
 				}
-				return event ? { event: event as TransactionEvent, transaction }: null;
+				return event ? { event: event as EventData, transaction }: null;
 			} catch(err) {
 				if (j)
 					await utils.sleep(1e3);
@@ -534,10 +520,10 @@ interface queue {
 
 export class TransactionQueue {
 
-	private _host: IWeb3;
+	private _host: IWeb3X;
 	private _tx_queues: Dict<queue> = {};
 
-	constructor(web3: IWeb3) {
+	constructor(web3: IWeb3X) {
 		this._host = web3;
 	}
 
