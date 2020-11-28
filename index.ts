@@ -182,7 +182,7 @@ export interface ABIDef {
 	abi: any[];
 }
 
-export interface IWeb3X {
+export interface IWeb3Z {
 	defaultAccount: string;
 	createContract(address: string, abi: any[], name?: string): Contract;
 	sendSignTransaction(signatureData: SignatureData, options?: SSTOptions): Promise<TransactionReceipt>;
@@ -191,7 +191,7 @@ export interface IWeb3X {
 	sign(options: SignOptions): Promise<SignatureData> | SignatureData;
 }
 
-export abstract class Web3X implements IWeb3X {
+export abstract class Web3Z implements IWeb3Z {
 	private _url: string;
 	private _default_account: string;
 	private _gasLimit = DEFAULT_GAS_LIMIT;
@@ -520,10 +520,10 @@ interface queue {
 
 export class TransactionQueue {
 
-	private _host: IWeb3X;
+	private _host: IWeb3Z;
 	private _tx_queues: Dict<queue> = {};
 
-	constructor(web3: IWeb3X) {
+	constructor(web3: IWeb3Z) {
 		this._host = web3;
 	}
 
