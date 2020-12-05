@@ -29,17 +29,20 @@
  * ***** END LICENSE BLOCK ***** */
 
 import utils from 'somes';
+import {IBuffer} from 'somes/buffer';
 import errno from './errno';
 import { List } from 'somes/event';
 import './_fix_contract';
 import './_fix_web3';
 import Web3 from 'web3';
 import {Contract as ContractRaw, Options as ContractOptions, 
-	EventData, CallOptions as MethodOptions, ContractSendMethod as ContractSendMethodRaw } from 'web3-eth-contract';
+	EventData, CallOptions, SendOptions, ContractSendMethod as ContractSendMethodRaw } from 'web3-eth-contract';
 import {Transaction,TransactionReceipt} from 'web3-core';
 import {BlockTransactionString as Block} from 'web3-eth';
 
-export { Web3, ContractOptions, EventData, Transaction, TransactionReceipt, Block, MethodOptions };
+export { Web3, ContractOptions, EventData, Transaction, TransactionReceipt, Block, CallOptions, SendOptions };
+
+const crypto_tx = require('crypto-tx');
 
 const __Web3__ = require('web3');
 
@@ -51,113 +54,35 @@ const TRANSACTION_CHECK_TIME = 3e4; // 30秒
 const DEFAULT_GAS_LIMIT = 1e8;
 const DEFAULT_GAS_PRICE = 1e5;
 
-// export interface Transaction {
-// 	hash: string;// 32 Bytes - String: Hash of the transaction.
-// 	nonce: number;// - Number: The number of transactions made by the sender prior to this one.
-// 	blockHash: string;// 32 Bytes - String: Hash of the block where this transaction was in. null when its pending.
-// 	blockNumber: number;// - Number: Block number where this transaction was in. null when its pending.
-// 	transactionIndex: number;// - Number: Integer of the transactions index position in the block. null when its pending.
-// 	from: string;// - String: Address of the sender.
-// 	to: string;// - String: Address of the receiver. null when its a contract creation transaction.
-// 	value: string;// - String: Value transferred in wei.
-// 	gasPrice: string;// - String: Gas price provided by the sender in wei.
-// 	gas: number;// - Number: Gas provided by the sender.
-// 	input: string;// - String: The data sent along with the transaction.
-// }
-
-// export interface TransactionReceipt {
-// 	status: boolean; // Boolean: TRUE if the transaction was successful, FALSE, if the EVM reverted the transaction.
-// 	blockHash: string; // 32 Bytes - String: Hash of the block where this transaction was in.
-// 	blockNumber: number; // Number: Block number where this transaction was in.
-// 	transactionHash: string; // 32 Bytes - String: Hash of the transaction.
-// 	transactionIndex: number; // Number: Integer of the transactions index position in the block.
-// 	from: string; // String: Address of the sender.
-// 	to: string; // String: Address of the receiver. null when its a contract creation transaction.
-// 	contractAddress: string; // String: The contract address created, if the transaction was a contract creation, otherwise null.
-// 	cumulativeGasUsed: number; // Number: The total amount of gas used when this transaction was executed in the block.
-// 	gasUsed: number; // Number: The amount of gas used by this specific transaction alone.
-// 	logs: string[]; // Array: Array of log objects, which this transaction generated.
-// }
-
-// export interface EventData {
-// 	event: string; // String: The event name.
-// 	signature: string | null; // String|Null: The event signature, null if it’s an anonymous event.
-// 	address: string; // String: Address this event originated from.
-// 	returnValues: Dict; // Object: The return values coming from the event, e.g. {myVar: 1, myVar2: '0x234...'}.
-// 	logIndex: number; // Number: Integer of the event index position in the block.
-// 	transactionIndex: number; // Number: Integer of the transaction’s index position the event was created in.
-// 	transactionHash: string; // 32 Bytes - String: Hash of the transaction this event was created in.
-// 	blockHash: string; // 32 Bytes - String: Hash of the block this event was created in. null when it’s still pending.
-// 	blockNumber: number; // Number: The block number this log was created in. null when still pending.
-// 	raw: {
-// 		data: string; // String: The data containing non-indexed log parameter.
-// 		topics: string[]; // Array: An array with max 4 32 Byte topics, topic 1-3 contains indexed
-// 	};
-// }
-
-// export interface Block {
-// 	number: number; // - Number: The block number. null when its pending block.
-// 	hash: string; // 32 Bytes - String: Hash of the block. null when its pending block.
-// 	parentHash: string; // 32 Bytes - String: Hash of the parent block.
-// 	nonce: number; // 8 Bytes - String: Hash of the generated proof-of-work. null when its pending block.
-// 	sha3Uncles: string; // 32 Bytes - String: SHA3 of the uncles data in the block.
-// 	logsBloom: string; // 256 Bytes - String: The bloom filter for the logs of the block. null when its pending block.
-// 	transactionsRoot: string; // 32 Bytes - String: The root of the transaction trie of the block
-// 	stateRoot: string; // 32 Bytes - String: The root of the final state trie of the block.
-// 	miner: string; // - String: The address of the beneficiary to whom the mining rewards were given.
-// 	difficulty: string; // - String: Integer of the difficulty for this block.
-// 	totalDifficulty: string; // - String: Integer of the total difficulty of the chain until this block.
-// 	extraData: string; // - String: The “extra data” field of this block.
-// 	size: number; // - Number: Integer the size of this block in bytes.
-// 	gasLimit: number; // - Number: The maximum gas allowed in this block.
-// 	gasUsed: number; // - Number: The total used gas by all transactions in this block.
-// 	timestamp: number; // - Number: The unix timestamp for when the block was collated.
-// 	transactions: (string /*| Transaction*/)[]; // - Array: Array of transaction objects, or 32 Bytes transaction hashes depending on the returnTransactionObjects parameter.
-// 	uncles: string[]; // - Array: Array of uncle hashes.
-// }
-
-// export interface ContractOptions {
-// 	address: string; // - String: The address where the contract is deployed. See options.address.
-// 	jsonInterface?: string[]; // - Array: The json interface of the contract. See options.jsonInterface.
-// 	data?: string; // - String: The byte code of the contract. Used when the contract gets deployed.
-// 	from?: string; // - String: The address transactions should be made from.
-// 	gasPrice?: string; // - String: The gas price in wei to use for transactions.
-// 	gas?: number; // - Number: The maximum gas provided for a transaction (gas limit).
-// }
-
-// export interface MethodOptions {
-// 	from?: string; // - String (optional): The address the call “transaction” should be made from.
-// 	gas?: number; // - Number (optional): The maximum gas provided for this call “transaction” (gas limit).
-// 	value?: number|string|bigint;
-// 	gasPrice?: string; // - String (optional): The gas price in wei to use for this call “transaction”.
-// }
-
 export interface FindEventResult {
 	event: EventData;
 	transaction: Transaction;
 }
 
-export interface SendSignTransactionOprions extends Dict {
+export interface SendTransactionOprions extends Dict {
 	timeout?: number;
 	blockRange?: number;
 }
 
-export type SSTOptions = SendSignTransactionOprions;
+export type STOptions = SendTransactionOprions;
 
-export interface SignOptions extends SSTOptions {
-	nonce?: number;
+export interface TxOptions extends STOptions {
 	from?: string;
 	to?: string;
+	value?: string;
 	gas?: number;
 	gasLimit?: number;
 	gasPrice?: number;
-	value?: string | Buffer;
-	data?: any;
+	data?: string;
+	nonce?: number;
 }
 
 export interface ContractSendMethod extends ContractSendMethodRaw {
-	sign(options?: SignOptions): Promise<SignatureData>;
-	sendSignTransaction(options?: SignOptions): Promise<TransactionReceipt>;
+	/**
+	 * returns serializedTx
+	 */
+	sign(options?: TxOptions): Promise<IBuffer>;
+	sendSignTransaction(options?: TxOptions): Promise<TransactionReceipt>;
 }
 
 export interface ContractMethod {
@@ -165,16 +90,10 @@ export interface ContractMethod {
 }
 
 export interface Contract extends ContractRaw {
+	readonly methods: {
+		[method: string]: ContractMethod;
+	};
 	findEvent(event: string, blockNumber: number, transactionHash: string): Promise<FindEventResult | null>;
-}
-
-export interface SignatureData {
-	rsvHex: {
-		r: string;
-		s: string;
-		v: string;
-	},
-	hex: string;
 }
 
 export interface ABIDef {
@@ -182,25 +101,42 @@ export interface ABIDef {
 	abi: any[];
 }
 
+export interface Signature {
+	signature: IBuffer;
+	recovery: number;
+}
+
 export interface IWeb3Z {
 	defaultAccount: string;
 	createContract(address: string, abi: any[], name?: string): Contract;
-	sendSignTransaction(signatureData: SignatureData, options?: SSTOptions): Promise<TransactionReceipt>;
+	sendSignTransaction(serializedTx: IBuffer, options?: STOptions): Promise<TransactionReceipt>;
 	getBlockNumber(): Promise<number>;
 	getNonce(account?: string): Promise<number>;
-	sign(options: SignOptions): Promise<SignatureData> | SignatureData;
+	sign(message: IBuffer, account?: string): Promise<Signature> | Signature;
+}
+
+class TxSigner {
+	private _account: string;
+	private _host: IWeb3Z;
+	constructor(host: IWeb3Z, account: string) {
+		this._host = host;
+		this._account = account;
+	}
+	sign(message: IBuffer) {
+		return this._host.sign(message, this._account);
+	}
 }
 
 export abstract class Web3Z implements IWeb3Z {
 	private _url: string;
-	private _default_account: string;
+	private _defaultAccount: string;
 	private _gasLimit = DEFAULT_GAS_LIMIT;
 	private _gasPrice = DEFAULT_GAS_PRICE;
-	private __web3__?: Web3;
+	private __raw__?: Web3;
 
 	constructor(url: string, defaultAccount = '') {
 		this._url = url || 'http://127.0.0.1:8545';
-		this._default_account = defaultAccount || '';
+		this._defaultAccount = defaultAccount || '';
 	}
 
 	get gasLimit() {
@@ -220,17 +156,17 @@ export abstract class Web3Z implements IWeb3Z {
 	}
 
 	get defaultAccount() {
-		return this._default_account;
+		return this._defaultAccount;
 	}
 
 	set defaultAccount(account) {
-		this._default_account = account;
-		if (this.__)
-			this.__.eth.defaultAccount = account;
+		this._defaultAccount = account;
+		if (this.raw)
+			this.raw.eth.defaultAccount = account;
 	}
 
-	get __() {
-		if (!this.__web3__) {
+	get raw() {
+		if (!this.__raw__) {
 			var url = this._url;
 			var { HttpProvider, WebsocketProvider } = __Web3__.providers;
 			var provider;
@@ -241,17 +177,17 @@ export abstract class Web3Z implements IWeb3Z {
 			} else {
 				throw Error(`Can't create 'Web3 provider`);
 			}
-			var __web3__ = new __Web3__(provider);
-			__web3__.eth.defaultAccount = this.defaultAccount;
-			this.__web3__ = __web3__;
+			var __raw__ = new __Web3__(provider);
+			__raw__.eth.defaultAccount = this.defaultAccount;
+			this.__raw__ = __raw__;
 		}
-		return this.__web3__ as Web3;
+		return this.__raw__ as Web3;
 	}
 
-	createContract(address: string, abi: any[]) {
+	createContract(contractAddress: string, abi: any[]) {
 		var self = this;
 		var account = self.defaultAccount;
-		var contract = new self.__.eth.Contract(abi, address, { 
+		var contract = new self.raw.eth.Contract(abi, contractAddress, { 
 			from: account, 
 			// TODO pos相夫本节点配置了这个"gas"参数所有协约get rpc请求均不能访问
 			/*gas: self.gasLimit, gasLimit: self.gasLimit,*/
@@ -262,36 +198,38 @@ export abstract class Web3Z implements IWeb3Z {
 		/**
 		 * @func signTx(param) 对交易进行签名
 		 */
-		async function signTx(ctx: ContractSendMethod, opts?: SignOptions): Promise<SignatureData> { //
-			var data = ctx.encodeABI();
+		async function signTx(method: ContractSendMethod, opts?: TxOptions): Promise<IBuffer> { //
 			var gasLimit = self.gasLimit;
 			var gasPrice = self.gasPrice + utils.random(0, 1000);
+			var data = method.encodeABI();
 
-			var rawTx = Object.assign({
+			var _opts = Object.assign({
 					from: account,
 					gas: gasLimit,
 					gasLimit: gasLimit,
 					gasPrice: gasPrice, value: '0x00',
 				},
-				opts, { to: address, data: data }
+				opts, { to: contractAddress, data: data }
 			);
-			var signatureData = await self.sign(rawTx);
-			return signatureData;
+
+			var signatureData = await crypto_tx.signTx(new TxSigner(self, _opts.from), _opts);
+
+			return signatureData.signTx;
 		}
 
 		/**
 		 * @func sendSignTransaction(param) 对交易进行签名并发送
 		 */
-		function Inl_sendSignTransaction(ctx: ContractSendMethod, opts?: SignOptions): Promise<TransactionReceipt> {
+		function sendSignTransaction(method: ContractSendMethod, opts?: TxOptions): Promise<TransactionReceipt> {
 			return new Promise(async function(resolve, reject) {
 				try {
-					var signatureData = await signTx(ctx, opts); // sign Transaction data
+					var serializedTx = await signTx(method, opts); // sign Transaction data
 				} catch(err) {
 					reject(err);
 					return;
 				}
 				try {
-					resolve(await self.sendSignTransaction(signatureData, opts));
+					resolve(await self.sendSignTransaction(serializedTx, opts));
 				} catch(err) {
 					reject(err);
 				}
@@ -303,10 +241,10 @@ export abstract class Web3Z implements IWeb3Z {
 			var { methods } = contract;
 			var raw = methods[name];
 			methods[name] = (...args: any[])=>{
-				var ctx = raw.call(methods, ...args) as ContractSendMethod;
-				ctx.sign = e=>signTx(ctx, e);
-				ctx.sendSignTransaction = e=>Inl_sendSignTransaction(ctx, e);
-				return ctx;
+				var method = raw.call(methods, ...args) as ContractSendMethod;
+				method.sign = e=>signTx(method, e);
+				method.sendSignTransaction = e=>sendSignTransaction(method, e);
+				return method;
 			};
 		});
 
@@ -317,7 +255,7 @@ export abstract class Web3Z implements IWeb3Z {
 		var j = 10;
 
 		while (j--) { // 确保本块已同步
-			var num = await this.__.eth.getBlockNumber();
+			var num = await this.raw.eth.getBlockNumber();
 			if (num >= blockNumber) {
 				break;
 			}
@@ -334,12 +272,12 @@ export abstract class Web3Z implements IWeb3Z {
 
 		while (j--) { // 重试10次,10次后仍然不能从链上查询到txid,丢弃
 			try {
-				var block = await this.__.eth.getBlock(blockNumber);// as Transaction[];
+				var block = await this.raw.eth.getBlock(blockNumber);// as Transaction[];
 				if (block) {
 					var transactions = block.transactions as string[];
 					var transactionIndex = transactions.indexOf(transactionHash);
 					if (transactionIndex != -1) {
-						if ( (tx = await this.__.eth.getTransactionFromBlock(blockNumber, transactionIndex)) )
+						if ( (tx = await this.raw.eth.getTransactionFromBlock(blockNumber, transactionIndex)) )
 							break;
 					}
 				}
@@ -380,11 +318,11 @@ export abstract class Web3Z implements IWeb3Z {
 	}
 
 	/**
-	 * @func sendSignTransaction(param) 对交易进行签名并发送
+	 * @func sendSignTransaction(serializedTx) 对交易进行签名并发送
 	 */
-	sendSignTransaction(signatureData: SignatureData, opts: SSTOptions = {}): Promise<TransactionReceipt> {
+	sendSignTransaction(serializedTx: IBuffer, opts: STOptions = {}): Promise<TransactionReceipt> {
 		var self = this;
-		var __ = this.__;
+		var raw = this.raw;
 		var TIMEOUT_ERRNO = errno.ERR_REQUEST_TIMEOUT[0];
 
 		return new Promise(async function(resolve, reject) {
@@ -424,7 +362,7 @@ export abstract class Web3Z implements IWeb3Z {
 					if (!completed) {
 						var receipt;
 						try {
-							receipt = await __.eth.getTransactionReceipt(transactionHash);
+							receipt = await raw.eth.getTransactionReceipt(transactionHash);
 						} catch(err) {
 							if (err.code != TIMEOUT_ERRNO) { // timeout
 								console.error(err);
@@ -456,14 +394,14 @@ export abstract class Web3Z implements IWeb3Z {
 
 			// send signed Transaction
 			// event: transactionHash,receipt,confirmation
-			(__.eth.sendSignedTransaction(signatureData.hex) as any)
+			(raw.eth.sendSignedTransaction('0x' + serializedTx.toString('hex')) as any)
 			.on('transactionHash', (e: string)=>check_receipt(e).catch(console.error))
 			.then((e:TransactionReceipt)=>check_receipt(e.transactionHash).catch(console.error))
 			.catch(async (e: Error)=>{
 				if (!completed) {
 					if (transactionHash) {
 						try {
-							var receipt = await __.eth.getTransactionReceipt(transactionHash);
+							var receipt = await raw.eth.getTransactionReceipt(transactionHash);
 							if (receipt && receipt.blockHash) {
 								complete(undefined, receipt);
 							}
@@ -483,27 +421,30 @@ export abstract class Web3Z implements IWeb3Z {
 		});
 	}
 
-	abstract sign(txData: SignOptions): Promise<SignatureData> | SignatureData;
+	/**
+	 * @func sign message long bytes32
+	 */
+	abstract sign(message: IBuffer, account?: string): Promise<Signature> | Signature;
 
 	// Rewrite by method
 
 	async getBlockNumber() {
-		return await utils.timeout(this.__.eth.getBlockNumber(), 1e4);
+		return await utils.timeout(this.raw.eth.getBlockNumber(), 1e4);
 	}
 
 	async getNonce(account = '') {
 		account = account || this.defaultAccount;
-		return await this.__.eth.getTransactionCount(account, 'latest');
+		return await this.raw.eth.getTransactionCount(account, 'latest');
 	}
 }
 
 export interface EnqueueExecArg {
-	account: string;
+	from: string;
 	nonce: number;
 }
 
 export interface EnqueueOptions {
-	account?: string;
+	from?: string;
 	retry?: number;
 	timeout?: number;
 }
@@ -542,11 +483,11 @@ export class TransactionQueue {
 		}
 		try {
 			var ctx = first.value as transaction_queue_context;
-			var {account} = ctx.options;
+			var {from} = ctx.options;
 			await this.beforeDequeue();
-			var nonce = await this._host.getNonce(account);
+			var nonce = await this._host.getNonce(from);
 			var ctx = queue.list.shift() as transaction_queue_context;
-			var args = { account, nonce/*, ctx*/ } as EnqueueExecArg;
+			var args = { from, nonce/*, ctx*/ } as EnqueueExecArg;
 			await ctx.dequeue(args);
 		} catch (err) {
 			console.error(err);
@@ -560,8 +501,8 @@ export class TransactionQueue {
 	 */
 	enqueue<R>(exec: (arg: EnqueueExecArg)=>Promise<R>, opts?: EnqueueOptions): Promise<R> {
 
-		var options: EnqueueOptions = { account: '', retry: 0, timeout: 0, ...opts };
-		var account = options.account = options.account || this._host.defaultAccount;
+		var options: EnqueueOptions = { from: '', retry: 0, timeout: 0, ...opts };
+		var account = options.from = options.from || this._host.defaultAccount;
 		var retry = options.retry = Number(options.retry) || 0;
 		var timeout = options.timeout = Number(options.timeout) || 0;
 
