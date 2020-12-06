@@ -29,12 +29,13 @@
  * ***** END LICENSE BLOCK ***** */
 
 import utils from 'somes';
-import {IBuffer} from 'somes/buffer';
+import buffer, {IBuffer} from 'somes/buffer';
 import errno from './errno';
 import { List } from 'somes/event';
 import './_fix_contract';
 import './_fix_web3';
 import Web3 from 'web3';
+import * as net from 'net';
 import {Contract as ContractRaw, Options as ContractOptions, 
 	EventData, CallOptions, SendOptions, ContractSendMethod as ContractSendMethodRaw } from 'web3-eth-contract';
 import {Transaction,TransactionReceipt} from 'web3-core';
@@ -50,7 +51,7 @@ const __Web3__ = require('web3');
 
 const SAFE_TRANSACTION_MAX_TIMEOUT = 300 * 1e3;  // 180秒
 const TRANSACTION_MAX_BLOCK_RANGE = 32;
-const TRANSACTION_CHECK_TIME = 3e4; // 30秒
+const TRANSACTION_CHECK_TIME = 1e4; // 10秒
 const DEFAULT_GAS_LIMIT = 1e8;
 const DEFAULT_GAS_PRICE = 1e5;
 
@@ -81,7 +82,7 @@ export interface ContractSendMethod extends ContractSendMethodRaw {
 	/**
 	 * returns serializedTx
 	 */
-	sign(options?: TxOptions): Promise<IBuffer>;
+	signTx(options?: TxOptions): Promise<IBuffer>;
 	sendSignTransaction(options?: TxOptions): Promise<TransactionReceipt>;
 }
 
@@ -109,7 +110,9 @@ export interface Signature {
 export interface IWeb3Z {
 	defaultAccount: string;
 	createContract(address: string, abi: any[], name?: string): Contract;
-	sendSignTransaction(serializedTx: IBuffer, options?: STOptions): Promise<TransactionReceipt>;
+	signTx(opts?: TxOptions): Promise<IBuffer>;
+	sendTransaction(opts?: TxOptions): Promise<TransactionReceipt>;
+	sendSignedTransaction(serializedTx: IBuffer, options?: STOptions): Promise<TransactionReceipt>;
 	getBlockNumber(): Promise<number>;
 	getNonce(account?: string): Promise<number>;
 	sign(message: IBuffer, account?: string): Promise<Signature> | Signature;
@@ -122,8 +125,12 @@ class TxSigner {
 		this._host = host;
 		this._account = account;
 	}
-	sign(message: IBuffer) {
-		return this._host.sign(message, this._account);
+	async sign(message: IBuffer) {
+		var signature = await this._host.sign(buffer.from(message), this._account);
+		return {
+			signature: Buffer.from(signature.signature),
+			recovery: signature.recovery,
+		};
 	}
 }
 
@@ -133,6 +140,8 @@ export abstract class Web3Z implements IWeb3Z {
 	private _gasLimit = DEFAULT_GAS_LIMIT;
 	private _gasPrice = DEFAULT_GAS_PRICE;
 	private __raw__?: Web3;
+
+	TRANSACTION_CHECK_TIME = TRANSACTION_CHECK_TIME;
 
 	constructor(url: string, defaultAccount = '') {
 		this._url = url || 'http://127.0.0.1:8545';
@@ -168,13 +177,16 @@ export abstract class Web3Z implements IWeb3Z {
 	get raw() {
 		if (!this.__raw__) {
 			var url = this._url;
-			var { HttpProvider, WebsocketProvider } = __Web3__.providers;
+			var { HttpProvider, WebsocketProvider, IpcProvider } = __Web3__.providers;
 			var provider;
 			if (/^https?:/.test(url)) {
 				provider = new HttpProvider(url, { timeout: SAFE_TRANSACTION_MAX_TIMEOUT });
 			} else if (/^wss?:/.test(url)) {
 				provider = new WebsocketProvider(url, { timeout: SAFE_TRANSACTION_MAX_TIMEOUT });
+			} else if (/^[\\/]/.test(url)) {
+				provider = new IpcProvider(url, net);
 			} else {
+				// TODO ipc file ...
 				throw Error(`Can't create 'Web3 provider`);
 			}
 			var __raw__ = new __Web3__(provider);
@@ -195,45 +207,17 @@ export abstract class Web3Z implements IWeb3Z {
 
 		contract.findEvent = (event: string, blockNumber: number, hash: string)=>this._findEvent(contract, event, blockNumber, hash);
 
-		/**
-		 * @func signTx(param) 对交易进行签名
-		 */
-		async function signTx(method: ContractSendMethod, opts?: TxOptions): Promise<IBuffer> { //
-			var gasLimit = self.gasLimit;
-			var gasPrice = self.gasPrice + utils.random(0, 1000);
-			var data = method.encodeABI();
-
-			var _opts = Object.assign({
-					from: account,
-					gas: gasLimit,
-					gasLimit: gasLimit,
-					gasPrice: gasPrice, value: '0x00',
-				},
-				opts, { to: contractAddress, data: data }
-			);
-
-			var signatureData = await crypto_tx.signTx(new TxSigner(self, _opts.from), _opts);
-
-			return signatureData.signTx;
+		async function signTx(method: ContractSendMethod, opts?: TxOptions) {
+			var _opts = Object.assign({ from: account, value: '0x00' }, opts, {
+				to: contractAddress,
+				data: method.encodeABI(),
+			});
+			var ib = await self.signTx(_opts);
+			return ib;
 		}
 
-		/**
-		 * @func sendSignTransaction(param) 对交易进行签名并发送
-		 */
-		function sendSignTransaction(method: ContractSendMethod, opts?: TxOptions): Promise<TransactionReceipt> {
-			return new Promise(async function(resolve, reject) {
-				try {
-					var serializedTx = await signTx(method, opts); // sign Transaction data
-				} catch(err) {
-					reject(err);
-					return;
-				}
-				try {
-					resolve(await self.sendSignTransaction(serializedTx, opts));
-				} catch(err) {
-					reject(err);
-				}
-			});
+		async function sendSignTransaction(method: ContractSendMethod, opts?: TxOptions) {
+			return self.sendSignedTransaction(await signTx(method, opts));
 		}
 
 		// TODO extend method signedTransaction() and sendSignedTransaction()
@@ -242,7 +226,7 @@ export abstract class Web3Z implements IWeb3Z {
 			var raw = methods[name];
 			methods[name] = (...args: any[])=>{
 				var method = raw.call(methods, ...args) as ContractSendMethod;
-				method.sign = e=>signTx(method, e);
+				method.signTx = e=>signTx(method, e),
 				method.sendSignTransaction = e=>sendSignTransaction(method, e);
 				return method;
 			};
@@ -318,9 +302,46 @@ export abstract class Web3Z implements IWeb3Z {
 	}
 
 	/**
-	 * @func sendSignTransaction(serializedTx) 对交易进行签名并发送
+	 * @func signTx(param) 对交易进行签名
 	 */
-	sendSignTransaction(serializedTx: IBuffer, opts: STOptions = {}): Promise<TransactionReceipt> {
+	async signTx(opts?: TxOptions): Promise<IBuffer> {
+		var _opts = Object.assign({
+			from: this.defaultAccount,
+			gas: this.gasLimit, // 该交易的执行时使用gas的上限
+			gasLimit: this.gasLimit, // 使用gas上限
+			gasPrice: this.gasPrice + utils.random(0, 1000), // gasprice就是起到一个汇率的作用
+			value: '0x00',
+		}, opts);
+
+		var signatureData = await crypto_tx.signTx(new TxSigner(this, _opts.from), _opts);
+
+		return signatureData.signTx;
+	}
+
+	/**
+	 * @func sendSignTransaction(param) 对交易进行签名并发送
+	 */
+	sendTransaction(opts?: TxOptions): Promise<TransactionReceipt> {
+		var self = this;
+		return new Promise(async function(resolve, reject) {
+			try {
+				var serializedTx = await self.signTx(opts); // sign Transaction data
+			} catch(err) {
+				reject(err);
+				return;
+			}
+			try {
+				resolve(await self.sendSignedTransaction(serializedTx, opts));
+			} catch(err) {
+				reject(err);
+			}
+		});
+	}
+
+	/**
+	 * @func sendSignTransaction(serializedTx) 发送签名后的交易
+	 */
+	sendSignedTransaction(serializedTx: IBuffer, opts: STOptions = {}): Promise<TransactionReceipt> {
 		var self = this;
 		var raw = this.raw;
 		var TIMEOUT_ERRNO = errno.ERR_REQUEST_TIMEOUT[0];
@@ -358,7 +379,7 @@ export abstract class Web3Z implements IWeb3Z {
 				transactionHash = hash;
 
 				do {
-					await utils.sleep(TRANSACTION_CHECK_TIME);
+					await utils.sleep(self.TRANSACTION_CHECK_TIME);
 					if (!completed) {
 						var receipt;
 						try {
