@@ -367,6 +367,7 @@ export abstract class Web3Z implements IWeb3Z {
 			function complete(err?: Error, receipt?: TransactionReceipt) {
 				if (!completed) {
 					completed = true;
+					console.log('send signed Transaction complete', id, err, receipt);
 					err ? reject(err): resolve(receipt);
 				}
 			}
@@ -413,7 +414,10 @@ export abstract class Web3Z implements IWeb3Z {
 				} while(!completed);
 			}
 
+			// 
 			// send signed Transaction
+			var id = utils.getId();
+			console.log('send signed Transaction', id);
 			// event: transactionHash,receipt,confirmation
 			(raw.eth.sendSignedTransaction('0x' + serializedTx.toString('hex')) as any)
 			.on('transactionHash', (e: string)=>check_receipt(e).catch(console.error))
@@ -573,6 +577,8 @@ export class TransactionQueue {
 			} as transaction_queue_context;
 
 			setTimeout(timeout);
+
+			console.log('web3.enqueue', opts);
 
 			var item = queue.list.push(ctx);
 			if (!queue.running) {
