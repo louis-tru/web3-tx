@@ -1,6 +1,6 @@
 {
 	"name": "web3z",
-	"version": "1.3.3",
+	"version": "1.3.4",
 	"description": "",
 	"main": "index.js",
 	"types": "index.ts",
