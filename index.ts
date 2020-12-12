@@ -76,6 +76,7 @@ export interface TxOptions extends STOptions {
 	gasPrice?: number;
 	data?: string;
 	nonce?: number;
+	chainId?: number;
 }
 
 export interface ContractSendMethod extends ContractSendMethodRaw {
@@ -140,6 +141,7 @@ export abstract class Web3Z implements IWeb3Z {
 	private _gasLimit = DEFAULT_GAS_LIMIT;
 	private _gasPrice = DEFAULT_GAS_PRICE;
 	private __raw__?: Web3;
+	private _chainId = 0;
 
 	TRANSACTION_CHECK_TIME = TRANSACTION_CHECK_TIME;
 
@@ -162,6 +164,14 @@ export abstract class Web3Z implements IWeb3Z {
 
 	set gasPrice(value) {
 		this._gasPrice = Number(value) || DEFAULT_GAS_PRICE;
+	}
+
+	get chainId() {
+		return this._chainId;
+	}
+
+	private async _getChainId() {
+		return this.raw.eth.getChainId();
 	}
 
 	get defaultAccount() {
@@ -311,6 +321,7 @@ export abstract class Web3Z implements IWeb3Z {
 			gasLimit: this.gasLimit, // 使用gas上限
 			gasPrice: this.gasPrice + utils.random(0, 1000), // gasprice就是起到一个汇率的作用
 			value: '0x00',
+			chainId: await this._getChainId(),
 		}, opts);
 
 		console.log('signTx, TxOptions =', opts);
