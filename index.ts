@@ -324,7 +324,7 @@ export abstract class Web3Z implements IWeb3Z {
 	sendTransaction(opts?: TxOptions): Promise<TransactionReceipt> {
 		var self = this;
 		return new Promise(async function(resolve, reject) {
-			console.log('send transaction, nonce =', opts?.nonce);
+			console.log('send transaction, TxOptions =', opts);
 			try {
 				var serializedTx = await self.signTx(opts); // sign Transaction data
 			} catch(err) {
