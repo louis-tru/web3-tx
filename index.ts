@@ -381,7 +381,7 @@ export abstract class Web3Z implements IWeb3Z {
 				if (!completed) {
 					completed = true;
 					console.log('send signed Transaction complete', id, err, receipt);
-					err ? reject(err): resolve(receipt);
+					err ? reject(err): resolve(receipt as TransactionReceipt);
 				}
 			}
 
