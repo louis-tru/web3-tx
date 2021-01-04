@@ -34,20 +34,18 @@ import errno from './errno';
 import { List } from 'somes/event';
 import './_fix_contract';
 import './_fix_web3';
-import Web3 from 'web3';
+import __Web3__ from 'web3';
 import * as net from 'net';
 import {Contract as ContractRaw, Options as ContractOptions, 
 	EventData, CallOptions, SendOptions, ContractSendMethod as ContractSendMethodRaw } from 'web3-eth-contract';
-import {Transaction,TransactionReceipt} from 'web3-core';
-import {BlockTransactionString as Block} from 'web3-eth';
+import {Transaction,TransactionReceipt,provider,PromiEvent} from 'web3-core';
+import {BlockTransactionString as Block, TransactionConfig} from 'web3-eth';
+
+const Web3 = require('web3') as typeof __Web3__;
 
 export { Web3, ContractOptions, EventData, Transaction, TransactionReceipt, Block, CallOptions, SendOptions };
 
 const crypto_tx = require('crypto-tx');
-
-const __Web3__ = require('web3');
-
-(exports as any).Web3 = __Web3__;
 
 const SAFE_TRANSACTION_MAX_TIMEOUT = 300 * 1e3;  // 180秒
 const TRANSACTION_MAX_BLOCK_RANGE = 32;
@@ -111,12 +109,11 @@ export interface Signature {
 export interface IWeb3Z {
 	defaultAccount: string;
 	createContract(address: string, abi: any[], name?: string): Contract;
-	signTx(opts?: TxOptions): Promise<IBuffer>;
-	sendTransaction(opts?: TxOptions): Promise<TransactionReceipt>;
 	sendSignedTransaction(serializedTx: IBuffer, options?: STOptions): Promise<TransactionReceipt>;
 	getBlockNumber(): Promise<number>;
 	getNonce(account?: string): Promise<number>;
 	sign(message: IBuffer, account?: string): Promise<Signature> | Signature;
+	signTx(opts?: TxOptions): Promise<IBuffer>;
 }
 
 class TxSigner {
@@ -135,19 +132,65 @@ class TxSigner {
 	}
 }
 
+export interface TransactionPromise extends Promise<TransactionReceipt> {
+	// sending
+	// sent
+	// transactionHash
+	// receipt
+	// confirmation
+	// error
+	hash(cb: (hash: string)=>void): void;
+}
+
+class TransactionPromiseIMPL extends utils.PromiseNx<TransactionReceipt> implements TransactionPromise {
+	private _hash?: (hash: string)=>void;
+	hash(cb: (hash: string)=>void) {
+		this._hash = cb;
+		return this;
+	}
+	getHash() {
+		return this._hash;
+	}
+}
+
 export abstract class Web3Z implements IWeb3Z {
-	private _url: string;
-	private _defaultAccount: string;
 	private _gasLimit = DEFAULT_GAS_LIMIT;
 	private _gasPrice = DEFAULT_GAS_PRICE;
-	private __raw__?: Web3;
+	private _web3?: __Web3__;
 	private _chainId = 0;
 
 	TRANSACTION_CHECK_TIME = TRANSACTION_CHECK_TIME;
 
-	constructor(url: string, defaultAccount = '') {
-		this._url = url || 'http://127.0.0.1:8545';
-		this._defaultAccount = defaultAccount || '';
+	getProvider(): provider {
+		return 'http://127.0.0.1:8545';
+	}
+
+	get web3() {
+		if (!this._web3) {
+			var provider = this.getProvider();
+			var { HttpProvider, WebsocketProvider, IpcProvider } = __Web3__.providers;
+			if (typeof provider == 'string') {
+				if (/^https?:/.test(provider)) { // http
+					provider = new HttpProvider(provider, { timeout: SAFE_TRANSACTION_MAX_TIMEOUT });
+				} else if (/^wss?:/.test(provider)) { // web socket
+					provider = new WebsocketProvider(provider, { timeout: SAFE_TRANSACTION_MAX_TIMEOUT });
+				} else if (/^[\\/]/.test(provider)) { // ipc
+					provider = new IpcProvider(provider, net);
+				} else {
+					throw Error(`Can't create 'Web3 provider`);
+				}
+			}
+			this._web3 = new __Web3__(provider);
+		}
+		return this._web3 as __Web3__;
+	}
+
+	get defaultAccount() {
+		return this.web3.defaultAccount || '';
+	}
+
+	set defaultAccount(account) {
+		this.web3.defaultAccount = account;
 	}
 
 	get gasLimit() {
@@ -171,45 +214,29 @@ export abstract class Web3Z implements IWeb3Z {
 	}
 
 	private async _getChainId() {
-		return this.raw.eth.getChainId();
+		return this.eth.getChainId();
 	}
 
-	get defaultAccount() {
-		return this._defaultAccount;
+	get currentProvider() {
+		return this.web3.currentProvider;
 	}
 
-	set defaultAccount(account) {
-		this._defaultAccount = account;
-		if (this.raw)
-			this.raw.eth.defaultAccount = account;
+	get eth() {
+		return this.web3.eth;
 	}
 
-	get raw() {
-		if (!this.__raw__) {
-			var url = this._url;
-			var { HttpProvider, WebsocketProvider, IpcProvider } = __Web3__.providers;
-			var provider;
-			if (/^https?:/.test(url)) {
-				provider = new HttpProvider(url, { timeout: SAFE_TRANSACTION_MAX_TIMEOUT });
-			} else if (/^wss?:/.test(url)) {
-				provider = new WebsocketProvider(url, { timeout: SAFE_TRANSACTION_MAX_TIMEOUT });
-			} else if (/^[\\/]/.test(url)) {
-				provider = new IpcProvider(url, net);
-			} else {
-				// TODO ipc file ...
-				throw Error(`Can't create 'Web3 provider`);
-			}
-			var __raw__ = new __Web3__(provider);
-			__raw__.eth.defaultAccount = this.defaultAccount;
-			this.__raw__ = __raw__;
-		}
-		return this.__raw__ as Web3;
+	get utils() {
+		return this.web3.utils;
+	}
+
+	get version() {
+		return this.web3.version;
 	}
 
 	createContract(contractAddress: string, abi: any[]) {
 		var self = this;
 		var account = self.defaultAccount;
-		var contract = new self.raw.eth.Contract(abi, contractAddress, { 
+		var contract = new self.eth.Contract(abi, contractAddress, {
 			from: account, 
 			// TODO pos相夫本节点配置了这个"gas"参数所有协约get rpc请求均不能访问
 			/*gas: self.gasLimit, gasLimit: self.gasLimit,*/
@@ -249,7 +276,7 @@ export abstract class Web3Z implements IWeb3Z {
 		var j = 10;
 
 		while (j--) { // 确保本块已同步
-			var num = await this.raw.eth.getBlockNumber();
+			var num = await this.eth.getBlockNumber();
 			if (num >= blockNumber) {
 				break;
 			}
@@ -266,12 +293,12 @@ export abstract class Web3Z implements IWeb3Z {
 
 		while (j--) { // 重试10次,10次后仍然不能从链上查询到txid,丢弃
 			try {
-				var block = await this.raw.eth.getBlock(blockNumber);// as Transaction[];
+				var block = await this.eth.getBlock(blockNumber);// as Transaction[];
 				if (block) {
 					var transactions = block.transactions as string[];
 					var transactionIndex = transactions.indexOf(transactionHash);
 					if (transactionIndex != -1) {
-						if ( (tx = await this.raw.eth.getTransactionFromBlock(blockNumber, transactionIndex)) )
+						if ( (tx = await this.eth.getTransactionFromBlock(blockNumber, transactionIndex)) )
 							break;
 					}
 				}
@@ -312,6 +339,11 @@ export abstract class Web3Z implements IWeb3Z {
 	}
 
 	/**
+	 * @func sign message long bytes32
+	 */
+	abstract sign(message: IBuffer, account?: string): Promise<Signature> | Signature;
+
+	/**
 	 * @func signTx(param) 对交易进行签名
 	 */
 	async signTx(opts?: TxOptions): Promise<IBuffer> {
@@ -331,35 +363,19 @@ export abstract class Web3Z implements IWeb3Z {
 		return signatureData.signTx;
 	}
 
-	/**
-	 * @func sendSignTransaction(param) 对交易进行签名并发送
-	 */
-	sendTransaction(opts?: TxOptions): Promise<TransactionReceipt> {
+	private _sendTransactionCheck(peceipt: PromiEvent<TransactionReceipt>, opts: STOptions = {}): TransactionPromise {
 		var self = this;
-		return new Promise(async function(resolve, reject) {
-			try {
-				var serializedTx = await self.signTx(opts); // sign Transaction data
-			} catch(err) {
-				reject(err);
-				return;
-			}
-			try {
-				resolve(await self.sendSignedTransaction(serializedTx, opts));
-			} catch(err) {
-				reject(err);
-			}
-		});
-	}
-
-	/**
-	 * @func sendSignTransaction(serializedTx) 发送签名后的交易
-	 */
-	sendSignedTransaction(serializedTx: IBuffer, opts: STOptions = {}): Promise<TransactionReceipt> {
-		var self = this;
-		var raw = this.raw;
+		var eth = this.eth;
 		var TIMEOUT_ERRNO = errno.ERR_REQUEST_TIMEOUT[0];
 
-		return new Promise(async function(resolve, reject) {
+		return new TransactionPromiseIMPL(async function (resolve, reject, p) {
+			// send signed Transaction
+			var id = utils.getId();
+			console.log('send signed Transaction', id);
+			// event: transactionHash,receipt,confirmation
+
+			var pp = p as TransactionPromiseIMPL;
+			var id = utils.getId();
 
 			try {
 				var blockNumber = await self.getBlockNumber();
@@ -385,61 +401,63 @@ export abstract class Web3Z implements IWeb3Z {
 				}
 			}
 
-			async function check_receipt(hash: string) {
-				utils.assert(hash);
-				
-				if (is_check) return;
-				is_check = true;
-				transactionHash = hash;
-
-				do {
-					await utils.sleep(self.TRANSACTION_CHECK_TIME);
-					if (!completed) {
-						var receipt;
-						try {
-							receipt = await raw.eth.getTransactionReceipt(transactionHash);
-						} catch(err) {
-							if (err.code != TIMEOUT_ERRNO) { // timeout
-								console.error(err);
-							} else {
-								console.warn(err);
-							}
-						}
-						if (receipt && receipt.blockHash) {
-							complete(undefined, receipt);
-							break;
-						} else if (timeout < Date.now()) {
-							complete(Error.new(errno.ERR_REQUEST_TIMEOUT));
-							break;
+			async function check(hash: string) {
+				var receipt;
+					try {
+						receipt = await eth.getTransactionReceipt(hash);
+					} catch(err) {
+						if (err.code != TIMEOUT_ERRNO) { // timeout
+							console.error(err);
 						} else {
-							var blockNumber = 0;
-							try {
-								blockNumber = await self.getBlockNumber();
-							} catch(err) {
-								console.error(err);
-							}
-							if (blockNumber && blockNumber > limit_block) {
-								complete(Error.new(errno.ERR_ETH_TRANSACTION_FAIL));
-								break;
-							}
+							console.warn(err);
 						}
 					}
-				} while(!completed);
+					if (receipt && receipt.blockHash) {
+						complete(undefined, receipt);
+					} else if (timeout < Date.now()) {
+						complete(Error.new(errno.ERR_REQUEST_TIMEOUT));
+					} else {
+						var blockNumber = 0;
+						try {
+							blockNumber = await self.getBlockNumber();
+						} catch(err) {
+							console.error(err);
+						}
+						if (blockNumber && blockNumber > limit_block) {
+							complete(Error.new(errno.ERR_ETH_TRANSACTION_FAIL));
+						}
+					}
 			}
 
-			// 
-			// send signed Transaction
-			var id = utils.getId();
-			console.log('send signed Transaction', id);
-			// event: transactionHash,receipt,confirmation
-			(raw.eth.sendSignedTransaction('0x' + serializedTx.toString('hex')) as any)
-			.on('transactionHash', (e: string)=>check_receipt(e).catch(console.error))
-			.then((e:TransactionReceipt)=>check_receipt(e.transactionHash).catch(console.error))
+			async function check_receipt(hash: string) {
+				utils.assert(hash, 'argument bad');
+
+				transactionHash = hash;
+				await check(hash);
+
+				if (is_check)
+					return;
+				is_check = true;
+
+				while (!completed) {
+					await utils.sleep(self.TRANSACTION_CHECK_TIME);
+					await check(hash);
+				}
+			}
+
+			peceipt
+			.on('transactionHash', (e: string)=>{
+					var cb = pp.getHash();
+					if (cb) {
+						cb(e);
+					}
+			})
+			.then(e=>check_receipt(e.transactionHash).catch(console.error))
 			.catch(async (e: Error)=>{
 				if (!completed) {
 					if (transactionHash) {
 						try {
-							var receipt = await raw.eth.getTransactionReceipt(transactionHash);
+							var receipt = await eth.getTransactionReceipt(transactionHash);
 							if (receipt && receipt.blockHash) {
 								complete(undefined, receipt);
 							}
@@ -460,19 +478,27 @@ export abstract class Web3Z implements IWeb3Z {
 	}
 
 	/**
-	 * @func sign message long bytes32
+	 * @func sendTransaction(tx) 发送交易数据
 	 */
-	abstract sign(message: IBuffer, account?: string): Promise<Signature> | Signature;
+	sendTransaction(tx: TransactionConfig, opts: STOptions = {}): Promise<TransactionReceipt> {
+		return this._sendTransactionCheck(this.eth.sendTransaction(tx), opts);
+	}
+
+	/**
+	 * @func sendSignedTransaction(serializedTx) 发送签名后交易数据
+	 */
+	sendSignedTransaction(serializedTx: IBuffer, opts: STOptions = {}): Promise<TransactionReceipt> {
+		return this._sendTransactionCheck(this.eth.sendSignedTransaction('0x' + serializedTx.toString('hex')), opts);
+	}
 
 	// Rewrite by method
 
 	async getBlockNumber() {
-		return await utils.timeout(this.raw.eth.getBlockNumber(), 1e4);
+		return await utils.timeout(this.eth.getBlockNumber(), 1e4);
 	}
 
-	async getNonce(account = '') {
-		account = account || this.defaultAccount;
-		return await this.raw.eth.getTransactionCount(account, 'latest');
+	async getNonce(account = this.defaultAccount) {
+		return await this.eth.getTransactionCount(account, 'latest');
 	}
 }
 
