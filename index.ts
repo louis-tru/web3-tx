@@ -475,14 +475,14 @@ export abstract class Web3Z implements IWeb3Z {
 	/**
 	 * @func sendTransaction(tx) 发送交易数据
 	 */
-	sendTransaction(tx: TransactionConfig, opts: STOptions = {}): Promise<TransactionReceipt> {
+	sendTransaction(tx: TransactionConfig, opts: STOptions = {}) {
 		return this._sendTransactionCheck(this.eth.sendTransaction(tx), opts);
 	}
 
 	/**
 	 * @func sendSignedTransaction(serializedTx) 发送签名后交易数据
 	 */
-	sendSignedTransaction(serializedTx: IBuffer, opts: STOptions = {}): Promise<TransactionReceipt> {
+	sendSignedTransaction(serializedTx: IBuffer, opts: STOptions = {}) {
 		return this._sendTransactionCheck(this.eth.sendSignedTransaction('0x' + serializedTx.toString('hex')), opts);
 	}
 
