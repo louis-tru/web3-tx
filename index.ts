@@ -32,13 +32,14 @@ import utils from 'somes';
 import buffer, {IBuffer} from 'somes/buffer';
 import errno from './errno';
 import './_fix_contract';
-import './_fix_web3';
 import __Web3__ from 'web3';
 import * as net from 'net';
 import {Contract as ContractRaw, Options as ContractOptions, 
 	EventData, CallOptions, SendOptions, ContractSendMethod as ContractSendMethodRaw } from 'web3-eth-contract';
 import {Transaction,TransactionReceipt,provider,PromiEvent} from 'web3-core';
 import {BlockTransactionString as Block, TransactionConfig} from 'web3-eth';
+
+import './_fix_web3';
 
 const Web3 = require('web3') as typeof __Web3__;
 
