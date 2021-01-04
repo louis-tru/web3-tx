@@ -31,7 +31,6 @@
 import utils from 'somes';
 import buffer, {IBuffer} from 'somes/buffer';
 import errno from './errno';
-import { List } from 'somes/event';
 import './_fix_contract';
 import './_fix_web3';
 import __Web3__ from 'web3';
@@ -94,11 +93,6 @@ export interface Contract extends ContractRaw {
 		[method: string]: ContractMethod;
 	};
 	findEvent(event: string, blockNumber: number, transactionHash: string): Promise<FindEventResult | null>;
-}
-
-export interface ABIDef {
-	address: string;
-	abi: any[];
 }
 
 export interface Signature {
@@ -500,131 +494,4 @@ export abstract class Web3Z implements IWeb3Z {
 	async getNonce(account = this.defaultAccount) {
 		return await this.eth.getTransactionCount(account, 'latest');
 	}
-}
-
-export interface EnqueueExecArg {
-	from: string;
-	nonce: number;
-}
-
-export interface EnqueueOptions {
-	from?: string;
-	retry?: number;
-	timeout?: number;
-}
-
-interface transaction_queue_context { 
-	retry: number;
-	options: EnqueueOptions;
-	dequeue: (arg: EnqueueOptions)=>Promise<any>
-}
-
-interface queue {
-	list: List<transaction_queue_context>; running: boolean;
-}
-
-export class TransactionQueue {
-
-	private _host: IWeb3Z;
-	private _tx_queues: Dict<queue> = {};
-
-	constructor(web3: IWeb3Z) {
-		this._host = web3;
-	}
-
-	get host() {
-		return this._host;
-	}
-
-	async beforeDequeue() {
-	}
-
-	private async _dequeue(queue: queue) {
-		var first = queue.list.first;
-		if (!first) {
-			queue.running = false;
-			return;
-		}
-		try {
-			var ctx = first.value as transaction_queue_context;
-			var {from} = ctx.options;
-			await this.beforeDequeue();
-			var nonce = await this._host.getNonce(from);
-			var ctx = queue.list.shift() as transaction_queue_context;
-			var args = { from, nonce/*, ctx*/ } as EnqueueExecArg;
-			await ctx.dequeue(args);
-		} catch (err) {
-			console.error(err);
-			await utils.sleep(1e3); // sleep 1s
-		}
-		this._dequeue(queue);
-	}
-
-	/**
-	 * @func enqueue(exec, options) 排队交易
-	 */
-	enqueue<R>(exec: (arg: EnqueueExecArg)=>Promise<R>, opts?: EnqueueOptions): Promise<R> {
-
-		var options: EnqueueOptions = { from: '', retry: 0, timeout: 0, ...opts };
-		var account = options.from = options.from || this._host.defaultAccount;
-		var retry = options.retry = Number(options.retry) || 0;
-		var timeout = options.timeout = Number(options.timeout) || 0;
-
-		var queue = this._tx_queues[account];
-		var now = Date.now();
-
-		if (!queue) {
-			this._tx_queues[account] = queue = { list: new List(), running: false };
-		}
-
-		return new Promise((resolve, reject)=>{
-			var tid = 0;
-			var setTimeout = (time: number)=>{
-				if (time) {
-					now = Date.now();
-					tid = (function() {
-						queue.list.del(item);
-						reject(Error.new(errno.ERR_TRANSACTION_TIMEOUT));
-					}).setTimeout(time);
-				}
-			};
-
-			var ctx = {
-				retry, options,
-				dequeue: async (arg: EnqueueExecArg)=>{
-					if (tid)
-						clearTimeout(tid);
-					try {
-						resolve(await exec(arg));
-					} catch(err) {
-						if (ctx.retry--) {
-							if (timeout) {
-								timeout = timeout - Date.now() + now;
-								if (timeout <= 0) { // timeout
-									return reject(err);
-								} else {
-									setTimeout(timeout);
-								}
-							}
-							console.error(err);
-							item = queue.list.push(ctx); // retry back
-						} else {
-							reject(err);
-						}
-					}
-				},
-			} as transaction_queue_context;
-
-			setTimeout(timeout);
-
-			console.log('web3.enqueue', opts);
-
-			var item = queue.list.push(ctx);
-			if (!queue.running) {
-				queue.running = true;
-				this._dequeue(queue);
-			}
-		});
-	}
-
 }
