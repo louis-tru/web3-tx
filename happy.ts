@@ -57,11 +57,11 @@ export default class HappyContract<T> {
 			return data;
 		}
 		if (outputs.length == 1) {
-			data = Array.isArray(data) ? data: [data];
+			data = [data]; //Array.isArray(data) ? data: [data];
 		}
 		var new_data = [];
-		var new_data_obj = {} as Dict;
-		var new_data_obj_len = 0;
+		// var new_data_obj = {} as Dict;
+		// var new_data_obj_len = 0;
 
 		for (var i = 0; i < outputs.length; i++) {
 			var item = data[i];
@@ -92,23 +92,23 @@ export default class HappyContract<T> {
 					break;
 			}
 
-			if (out.name) {
-				new_data_obj_len++;
-				new_data_obj[out.name] = item;
-			}
+			// if (out.name) {
+			// 	new_data_obj_len++;
+			// 	new_data_obj[out.name] = item;
+			// }
 
 			new_data.push(item);
 		}
 
-		if (new_data_obj_len > 1 && new_data_obj_len == new_data.length) {
-			new_data = [new_data_obj];
-		}
+		// if (new_data_obj_len > 1 && new_data_obj_len == new_data.length) {
+		// 	new_data = [new_data_obj];
+		// }
 
 		return new_data;
 	}
 
 	happy(from?: string): T {
-		var {_queue} = this;
+		var {_queue,_web3} = this;
 		return new Proxy(this, {
 			get(target: HappyContract<T>, p: PropertyKey, receiver: any) {
 
@@ -121,27 +121,50 @@ export default class HappyContract<T> {
 				}
 
 				return async function(...args: any[]) {
+					from = from || await _web3.getDefaultAccount();
 
 					if ( (abi.stateMutability as string).indexOf('view') == -1 ) {
-						if (_queue) {
-							var receipt = await _queue.push(e=>method.apply(target._methods, args).sendSignTransaction(e), {from});
+						if (_web3.sign) {
+							if (_queue) {
+								var receipt = await _queue.push(e=>method.apply(target._methods, args).sendSignTransaction(e), {from});
+							} else {
+								var receipt = await method.apply(target._methods, args).sendSignTransaction({from});
+							}
 						} else {
-							var receipt = await method.apply(target._methods, args).sendSignTransaction({from});
+							if (_queue) {
+								var receipt = await _queue.push(e=>method.apply(target._methods, args).send2(e), {from});
+							} else {
+								var receipt = await method.apply(target._methods, args).send2({from});
+							}
 						}
 						return receipt;
 					}
 					else {
-						var outputs = await method.apply(target._methods, args).call({from});
+						var rawOutputs = await method.apply(target._methods, args).call({from});
 						var abiOutputs = abi.outputs as AbiOutput[];
-						var outputs2 = target._parseOutputs(outputs, abiOutputs);
+						var outputs = target._parseOutputs(rawOutputs, abiOutputs);
 
 						if (abiOutputs.length) {
-							if (outputs2.length == 1) {
-								return outputs2[0];
-							} else if (outputs2.length === 0) {
+							if (outputs.length == 1) {
+								return outputs[0];
+							} else if (outputs.length === 0) {
 								return void(0);
 							} else {
-								return outputs2;
+								var newOutputs = {} as Dict;
+								var newOutputs_len = 0;
+								for (var i = 0; i < abiOutputs.length; i++) {
+									var item = outputs[i];
+									var out = abiOutputs[i];
+									if (out.name) {
+										newOutputs_len++;
+										newOutputs[out.name] = item;
+									}
+								}
+								if (newOutputs_len > 1 && newOutputs_len == outputs.length) {
+									return newOutputs;
+								} else {
+									return outputs;
+								}
 							}
 						}
 					}

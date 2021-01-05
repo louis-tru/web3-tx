@@ -7,6 +7,7 @@ export class ErrnoList extends BaseErrnoList {
 	ERR_ETH_TRANSACTION_FAIL: ErrnoCode = [100241, '发送以太坊交易失败']
 	ERR_REQUEST_TIMEOUT: ErrnoCode = [100232, '请求操时', '请求操时']
 	ERR_TRANSACTION_TIMEOUT: ErrnoCode = [100256, 'TRANSACTION TIMEOUT']
+	ERR_IWEB3Z_SIGN_NOT_IMPL: ErrnoCode = [100257, 'IWeb3Z.sign Not implemented']
 };
 
 export default new ErrnoList();

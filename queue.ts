@@ -97,7 +97,7 @@ export class TransactionQueue {
 	push<R>(exec: (arg: EnqueueExecArg)=>Promise<R>, opts?: EnqueueOptions): Promise<R> {
 
 		var options: EnqueueOptions = { from: '', retry: 0, timeout: 0, ...opts };
-		var account = options.from = options.from || this._host.defaultAccount;
+		var account = options.from = options.from || this._host.web3.defaultAccount || '';
 		var retry = options.retry = Number(options.retry) || 0;
 		var timeout = options.timeout = Number(options.timeout) || 0;
 

@@ -36,7 +36,7 @@ import __Web3__ from 'web3';
 import * as net from 'net';
 import {Contract as ContractRaw, Options as ContractOptions, 
 	EventData, CallOptions, SendOptions, ContractSendMethod as ContractSendMethodRaw } from 'web3-eth-contract';
-import {Transaction,TransactionReceipt,provider,PromiEvent} from 'web3-core';
+import {Transaction,TransactionReceipt,provider,PromiEvent, EventLog} from 'web3-core';
 import {BlockTransactionString as Block, TransactionConfig} from 'web3-eth';
 
 import './_fix_web3';
@@ -82,7 +82,8 @@ export interface ContractSendMethod extends ContractSendMethodRaw {
 	 * returns serializedTx
 	 */
 	signTx(options?: TxOptions): Promise<IBuffer>;
-	sendSignTransaction(options?: TxOptions): Promise<TransactionReceipt>;
+	sendSignTransaction(options?: TxOptions): TransactionPromise;
+	send2(opts: TxOptions): TransactionPromise;
 }
 
 export interface ContractMethod {
@@ -102,12 +103,13 @@ export interface Signature {
 }
 
 export interface IWeb3Z {
-	defaultAccount: string;
+	readonly web3: __Web3__;
+	getDefaultAccount(): Promise<string>;
 	createContract(address: string, abi: any[], name?: string): Contract;
 	sendSignedTransaction(serializedTx: IBuffer, options?: STOptions): Promise<TransactionReceipt>;
 	getBlockNumber(): Promise<number>;
 	getNonce(account?: string): Promise<number>;
-	sign(message: IBuffer, account?: string): Promise<Signature> | Signature;
+	sign?(message: IBuffer, account?: string): Promise<Signature> | Signature;
 	signTx(opts?: TxOptions): Promise<IBuffer>;
 }
 
@@ -119,6 +121,8 @@ class TxSigner {
 		this._account = account;
 	}
 	async sign(message: IBuffer) {
+		if (!this._host.sign)
+			throw Error.new(errno.ERR_IWEB3Z_SIGN_NOT_IMPL);
 		var signature = await this._host.sign(buffer.from(message), this._account);
 		return {
 			signature: Buffer.from(signature.signature),
@@ -160,7 +164,7 @@ class TransactionPromiseIMPL extends utils.PromiseNx<TransactionReceipt> impleme
 	}
 }
 
-export abstract class Web3Z implements IWeb3Z {
+export class Web3Z implements IWeb3Z {
 	private _gasLimit = DEFAULT_GAS_LIMIT;
 	private _gasPrice = DEFAULT_GAS_PRICE;
 	private _web3?: __Web3__;
@@ -192,12 +196,8 @@ export abstract class Web3Z implements IWeb3Z {
 		return this._web3 as __Web3__;
 	}
 
-	get defaultAccount() {
-		return this.web3.defaultAccount || '';
-	}
-
-	set defaultAccount(account) {
-		this.web3.defaultAccount = account;
+	async getDefaultAccount() {
+		return this.web3.defaultAccount || (await this.eth.getAccounts())[0] || '';
 	}
 
 	get gasLimit() {
@@ -242,7 +242,7 @@ export abstract class Web3Z implements IWeb3Z {
 
 	createContract(contractAddress: string, abi: any[]) {
 		var self = this;
-		var account = self.defaultAccount;
+		var account = self.web3.defaultAccount || '';
 		var contract = new self.eth.Contract(abi, contractAddress, {
 			from: account, 
 			// TODO pos相夫本节点配置了这个"gas"参数所有协约get rpc请求均不能访问
@@ -260,8 +260,22 @@ export abstract class Web3Z implements IWeb3Z {
 			return ib;
 		}
 
-		async function sendSignTransaction(method: ContractSendMethod, opts?: TxOptions) {
-			return self.sendSignedTransaction(await signTx(method, opts));
+		function sendSignTransaction(method: ContractSendMethod, opts?: TxOptions) {
+			return TransactionPromiseIMPL.proxy(async ()=>{
+				var tx = await signTx(method, opts);
+				var promise = self.sendSignedTransaction(tx, opts);
+				return {promise};
+			});
+		}
+
+		function send2(method: ContractSendMethod, opts?: TxOptions) {
+			return TransactionPromiseIMPL.proxy(async ()=>{
+				var from = opts?.from || await self.getDefaultAccount();
+				var opts_ = Object.assign(opts, {from}) as SendOptions;
+				var promise1 = method.send(opts_) as unknown as PromiEvent<TransactionReceipt>
+				var promise = self._sendTransactionCheck(promise1, opts_);
+				return {promise};
+			});
 		}
 
 		// TODO extend method signedTransaction() and sendSignedTransaction()
@@ -272,6 +286,7 @@ export abstract class Web3Z implements IWeb3Z {
 				var method = raw.call(methods, ...args) as ContractSendMethod;
 				method.signTx = e=>signTx(method, e),
 				method.sendSignTransaction = e=>sendSignTransaction(method, e);
+				method.send2 = e=>send2(method, e);
 				return method;
 			};
 		});
@@ -348,14 +363,14 @@ export abstract class Web3Z implements IWeb3Z {
 	/**
 	 * @func sign message long bytes32
 	 */
-	abstract sign(message: IBuffer, account?: string): Promise<Signature> | Signature;
+	sign?(message: IBuffer, account?: string): Promise<Signature> | Signature;
 
 	/**
 	 * @func signTx(param) 对交易进行签名
 	 */
 	async signTx(opts?: TxOptions): Promise<IBuffer> {
 		var _opts = Object.assign({
-			from: this.defaultAccount,
+			from: this.web3.defaultAccount,
 			gas: this.gasLimit, // 该交易的执行时使用gas的上限
 			gasLimit: this.gasLimit, // 使用gas上限
 			gasPrice: this.gasPrice + utils.random(0, 1000), // gasprice就是起到一个汇率的作用
@@ -398,19 +413,36 @@ export abstract class Web3Z implements IWeb3Z {
 			var completed = false
 			var is_check = false;
 			var transactionHash = '';
+			var rawReceipt: TransactionReceipt | undefined;
 
 			function complete(err?: Error, receipt?: TransactionReceipt) {
 				if (!completed) {
 					completed = true;
+					if (receipt) {
+						receipt = Object.assign(rawReceipt || {}, receipt);
+						if (receipt.status) {
+							err = undefined;
+						} else {
+							if (!err) {
+								err = Error.new(errno.ERR_ETH_TRANSACTION_FAIL);
+							}
+						}
+					}
 					console.log('send signed Transaction complete', id, err, receipt);
-					err ? reject(err): resolve(receipt as TransactionReceipt);
+					err ? reject(Object.assign(Error.new(err), {receipt})): resolve(receipt as TransactionReceipt);
 				}
 			}
 
-			async function check(hash: string) {
-				var receipt;
+			async function check_receipt() {
+				utils.assert(transactionHash, 'argument bad');
+				if (is_check)
+					return;
+				is_check = true;
+
+				while (!completed) {
+					var receipt;
 					try {
-						receipt = await eth.getTransactionReceipt(hash);
+						receipt = await eth.getTransactionReceipt(transactionHash);
 					} catch(err) {
 						if (err.code != TIMEOUT_ERRNO) { // timeout
 							console.error(err);
@@ -433,53 +465,44 @@ export abstract class Web3Z implements IWeb3Z {
 							complete(Error.new(errno.ERR_ETH_TRANSACTION_FAIL));
 						}
 					}
-			}
-
-			async function check_receipt(hash: string) {
-				utils.assert(hash, 'argument bad');
-
-				transactionHash = hash;
-				await check(hash);
-
-				if (is_check)
-					return;
-				is_check = true;
-
-				while (!completed) {
 					await utils.sleep(self.TRANSACTION_CHECK_TIME);
-					await check(hash);
 				}
 			}
 
 			peceipt
-			.on('transactionHash', (e: string)=>{
-					var cb = pp.getHash();
-					if (cb) {
-						cb(e);
-					}
+			.on('transactionHash', (hash: string)=>{
+				transactionHash = hash;
+				var cb = pp.getHash();
+				if (cb)
+					cb(hash);
 			})
-			.then(e=>check_receipt(e.transactionHash).catch(console.error))
+			.then(e=>{
+				// console.log('_sendTransactionCheck . then', e);
+				transactionHash = e.transactionHash;
+				rawReceipt = e;
+				check_receipt().catch(console.error);
+			})
 			.catch(async (e: Error)=>{
 				if (!completed) {
 					if (transactionHash) {
 						try {
 							var receipt = await eth.getTransactionReceipt(transactionHash);
 							if (receipt && receipt.blockHash) {
-								complete(undefined, receipt);
+								complete(e, receipt);
 							}
 						} catch(err) {
-							if (err.code != TIMEOUT_ERRNO) {
-								console.error(err);
-							} else {
-								console.warn(err);
-							}
+							console.warn(err);
 						}
-					} else if (e.code != TIMEOUT_ERRNO) {
+						if (!completed) {
+							check_receipt().catch(console.error)
+						}
+					} else {
 						complete(e);
 					}
 				}
 			});
 
+			// end
 		});
 	}
 
@@ -514,7 +537,7 @@ export abstract class Web3Z implements IWeb3Z {
 		return await utils.timeout(this.eth.getBlockNumber(), 1e4);
 	}
 
-	async getNonce(account = this.defaultAccount) {
-		return await this.eth.getTransactionCount(account, 'latest');
+	async getNonce(account?: string) {
+		return await this.eth.getTransactionCount(account || await this.getDefaultAccount(), 'latest');
 	}
 }
