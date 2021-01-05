@@ -146,6 +146,18 @@ class TransactionPromiseIMPL extends utils.PromiseNx<TransactionReceipt> impleme
 	getHash() {
 		return this._hash;
 	}
+	static proxy(exec: ()=>Promise<{promise:TransactionPromise}>) {
+		return new TransactionPromiseIMPL(async (r, j, p)=>{
+			var p_ = p as TransactionPromiseIMPL;
+			var e = await exec();
+			e.promise.hash(_=>{
+				var cb = p_.getHash();
+				if (cb)
+					cb(_);
+			});
+			r(await e.promise);
+		});
+	}
 }
 
 export abstract class Web3Z implements IWeb3Z {
@@ -358,6 +370,10 @@ export abstract class Web3Z implements IWeb3Z {
 		return signatureData.signTx;
 	}
 
+	/**
+	 * @func _sendTransactionCheck()
+	 * @private
+	 */
 	private _sendTransactionCheck(peceipt: PromiEvent<TransactionReceipt>, opts: STOptions = {}): TransactionPromise {
 		var self = this;
 		var eth = this.eth;
@@ -372,12 +388,7 @@ export abstract class Web3Z implements IWeb3Z {
 			var pp = p as TransactionPromiseIMPL;
 			var id = utils.getId();
 
-			try {
-				var blockNumber = await self.getBlockNumber();
-			} catch(err) {
-				reject(err);
-				return;
-			}
+			var blockNumber = await self.getBlockNumber();
 
 			opts = opts || {};
 
@@ -469,6 +480,17 @@ export abstract class Web3Z implements IWeb3Z {
 				}
 			});
 
+		});
+	}
+
+	/**
+	 * @func sendTransaction(tx) 签名交易数据并发送
+	 */
+	async sendSignTransaction(opts?: TxOptions) {
+		return TransactionPromiseIMPL.proxy(async ()=>{
+			var tx = await this.signTx(opts);
+			var promise = this.sendSignedTransaction(tx, opts);
+			return {promise};
 		});
 	}
 
