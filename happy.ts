@@ -51,58 +51,61 @@ export default class HappyContract<T> {
 		return this._contract;
 	}
 
+	private _parseTupleOutputs(out: AbiOutput, item: any) {
+		var touts = out.components as AbiOutput[];
+		var tdatas = this._parseOutputs(item, touts);
+		var obj = {} as Dict;
+		for (var j = 0; j < touts.length; j++) {
+			var tdata = tdatas[j];
+			obj[touts[j].name] = tdata;
+		}
+		return obj;
+	}
+
+	private _parseItemOutputs(type: string, out: AbiOutput, item: any) {
+		switch(type) {
+			case 'tuple':
+				item = this._parseTupleOutputs(out, item);
+				break;
+			case 'int256':
+			case 'uint256':
+				item = BigInt(item);
+				break;
+			case 'uint8':
+			case 'uint16':
+			case 'uint32':
+			case 'int8':
+			case 'int16':
+			case 'int32':
+				item = Number(item);
+				break;
+		}
+		return item;
+	}
+
 	private _parseOutputs(data: any, outputs: AbiOutput[]) {
 
 		if (outputs.length === 0) {
 			return data;
 		}
 		if (outputs.length == 1) {
-			data = [data]; //Array.isArray(data) ? data: [data];
+			data = [data]; // Array.isArray(data) ? data: [data];
 		}
 		var new_data = [];
-		// var new_data_obj = {} as Dict;
-		// var new_data_obj_len = 0;
 
 		for (var i = 0; i < outputs.length; i++) {
 			var item = data[i];
 			var out = outputs[i];
+			var type = out.type;
 
-			switch(out.type) {
-				case 'tuple':
-					var touts = out.components as AbiOutput[];
-					var tdatas = this._parseOutputs(item, touts);
-					var obj = {} as Dict;
-					for (var j = 0; j < touts.length; j++) {
-						var tdata = tdatas[j];
-						obj[touts[j].name] = tdata;
-					}
-					item = obj;
-					break;
-				case 'int256':
-				case 'uint256':
-					item = BigInt(item);
-					break;
-				case 'uint8':
-				case 'uint16':
-				case 'uint32':
-				case 'int8':
-				case 'int16':
-				case 'int32':
-					item = Number(item);
-					break;
+			if (type.substr(type.length - 2) == '[]') {
+				item = (item as any[]).map(e=>this._parseItemOutputs(type.substr(0, type.length - 2), out, e));
+			} else {
+				item = this._parseItemOutputs(type, out, item);
 			}
-
-			// if (out.name) {
-			// 	new_data_obj_len++;
-			// 	new_data_obj[out.name] = item;
-			// }
 
 			new_data.push(item);
 		}
-
-		// if (new_data_obj_len > 1 && new_data_obj_len == new_data.length) {
-		// 	new_data = [new_data_obj];
-		// }
 
 		return new_data;
 	}
