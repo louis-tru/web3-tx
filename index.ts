@@ -36,7 +36,7 @@ import __Web3__ from 'web3';
 import * as net from 'net';
 import {Contract as ContractRaw, Options as ContractOptions, 
 	EventData, CallOptions, SendOptions, ContractSendMethod as ContractSendMethodRaw } from 'web3-eth-contract';
-import {Transaction,TransactionReceipt,provider,PromiEvent, EventLog} from 'web3-core';
+import {Transaction,TransactionReceipt,provider,PromiEvent } from 'web3-core';
 import {BlockTransactionString as Block, TransactionConfig} from 'web3-eth';
 
 import './_fix_web3';
@@ -248,6 +248,8 @@ export class Web3Z implements IWeb3Z {
 			// TODO pos相夫本节点配置了这个"gas"参数所有协约get rpc请求均不能访问
 			/*gas: self.gasLimit, gasLimit: self.gasLimit,*/
 		}) as Contract;
+
+		// setProvider
 
 		contract.findEvent = (event: string, blockNumber: number, hash: string)=>this._findEvent(contract, event, blockNumber, hash);
 
@@ -518,7 +520,7 @@ export class Web3Z implements IWeb3Z {
 	}
 
 	/**
-	 * @func sendTransaction(tx) 发送交易数据
+	 * @func sendTransaction(tx) 发送交易数据(不签名)
 	 */
 	sendTransaction(tx: TransactionConfig, opts: STOptions = {}) {
 		return this._sendTransactionCheck(this.eth.sendTransaction(tx), opts);
