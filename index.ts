@@ -105,7 +105,7 @@ export interface Signature {
 export interface IWeb3Z {
 	readonly web3: __Web3__;
 	getDefaultAccount(): Promise<string>;
-	createContract(address: string, abi: any[], name?: string): Contract;
+	createContract(address: string, abi: any[]): Contract;
 	sendSignedTransaction(serializedTx: IBuffer, options?: STOptions): Promise<TransactionReceipt>;
 	getBlockNumber(): Promise<number>;
 	getNonce(account?: string): Promise<number>;
