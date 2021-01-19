@@ -33,25 +33,27 @@ import {IWeb3Z} from './index';
 import { List } from 'somes/event';
 import errno from './errno';
 
-export interface EnqueueExecArg {
+export interface ExecOptions {
 	from: string;
 	nonce: number;
+	gasLimit: number;
 }
 
-export interface EnqueueOptions {
+export interface Options {
 	from?: string;
 	retry?: number;
 	timeout?: number;
 }
 
-interface transaction_queue_context { 
+interface queue_context {
 	retry: number;
-	options: EnqueueOptions;
-	dequeue: (arg: EnqueueOptions)=>Promise<any>
+	options: Options;
+	dequeue: (arg: ExecOptions)=>Promise<any>
 }
 
 interface queue {
-	list: List<transaction_queue_context>; running: boolean;
+	list: List<queue_context>;
+	running: boolean;
 }
 
 export class TransactionQueue {
@@ -77,12 +79,12 @@ export class TransactionQueue {
 			return;
 		}
 		try {
-			var ctx = first.value as transaction_queue_context;
+			var ctx = first.value as queue_context;
 			var {from} = ctx.options;
 			await this.beforeDequeue();
 			var nonce = await this._host.getNonce(from);
-			var ctx = queue.list.shift() as transaction_queue_context;
-			var args = { from, nonce/*, ctx*/ } as EnqueueExecArg;
+			var ctx = queue.list.shift() as queue_context;
+			var args = { from, nonce/*, ctx*/ } as ExecOptions;
 			await ctx.dequeue(args);
 		} catch (err) {
 			console.error(err);
@@ -92,11 +94,11 @@ export class TransactionQueue {
 	}
 
 	/**
-	 * @func enqueue(exec, options) 排队交易
+	 * @func push(exec, options) 排队交易
 	 */
-	push<R>(exec: (arg: EnqueueExecArg)=>Promise<R>, opts?: EnqueueOptions): Promise<R> {
+	push<R>(exec: (arg: ExecOptions)=>Promise<R>, opts?: Options): Promise<R> {
 
-		var options: EnqueueOptions = { from: '', retry: 0, timeout: 0, ...opts };
+		var options: Options = { from: '', retry: 0, timeout: 0, ...opts };
 		var account = options.from = options.from || this._host.web3.defaultAccount || '';
 		var retry = options.retry = Number(options.retry) || 0;
 		var timeout = options.timeout = Number(options.timeout) || 0;
@@ -122,7 +124,7 @@ export class TransactionQueue {
 
 			var ctx = {
 				retry, options,
-				dequeue: async (arg: EnqueueExecArg)=>{
+				dequeue: async (arg: ExecOptions)=>{
 					if (tid)
 						clearTimeout(tid);
 					try {
@@ -144,7 +146,7 @@ export class TransactionQueue {
 						}
 					}
 				},
-			} as transaction_queue_context;
+			} as queue_context;
 
 			setTimeout(timeout);
 
@@ -156,6 +158,20 @@ export class TransactionQueue {
 				this._dequeue(queue);
 			}
 		});
+	}
+
+	/**
+	 * @func getNonce() 获取排队nonce
+	 */
+	async getNonce(account?: string, timeout?: number): Promise<{ from: string; nonce: number; gasLimit: number }> {
+		account = account || await this._host.getDefaultAccount();
+		utils.assert(account, 'getNonce error account empty');
+		// TODO ...
+		return {
+			from: account,
+			nonce: 0,
+			gasLimit: 0,
+		};
 	}
 
 }

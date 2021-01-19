@@ -69,7 +69,6 @@ export interface TxOptions extends STOptions {
 	from?: string;
 	to?: string;
 	value?: string;
-	gas?: number;
 	gasLimit?: number;
 	gasPrice?: number;
 	data?: string;
@@ -139,7 +138,7 @@ export interface TransactionPromise extends Promise<TransactionReceipt> {
 	// receipt
 	// confirmation
 	// error
-	hash(cb: (hash: string)=>void): void;
+	hash(cb: (hash: string)=>void): this;
 }
 
 class TransactionPromiseIMPL extends utils.PromiseNx<TransactionReceipt> implements TransactionPromise {
@@ -379,9 +378,9 @@ export class Web3Z implements IWeb3Z {
 	async signTx(opts?: TxOptions): Promise<IBuffer> {
 		var _opts = Object.assign({
 			from: this.web3.defaultAccount,
-			gas: this.gasLimit, // 该交易的执行时使用gas的上限
-			gasLimit: this.gasLimit, // 使用gas上限
-			gasPrice: this.gasPrice + utils.random(0, 1000), // gasprice就是起到一个汇率的作用
+			// gas: this.gasLimit, // 该交易的执行时使用gas的上限
+			gasLimit: this.gasLimit, // 该交易的执行时使用gas的上限
+			gasPrice: this.gasPrice, // gasprice就是起到一个汇率的作用
 			value: '0x00',
 			chainId: await this._getChainId(),
 		}, opts);
@@ -533,7 +532,7 @@ export class Web3Z implements IWeb3Z {
 	}
 
 	/**
-	 * @func sendSignedTransaction(serializedTx) 发送签名后交易数据
+	 * @func sendSignedTransaction(serializedTx) 发送签名后的交易数据
 	 */
 	sendSignedTransaction(serializedTx: IBuffer, opts: STOptions = {}) {
 		return this._sendTransactionCheck(this.eth.sendSignedTransaction('0x' + serializedTx.toString('hex')), opts);
