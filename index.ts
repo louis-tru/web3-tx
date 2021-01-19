@@ -105,6 +105,7 @@ export interface Signature {
 export interface IWeb3Z {
 	readonly web3: __Web3__;
 	getDefaultAccount(): Promise<string>;
+	setDefaultAccount(account: string): void;
 	createContract(address: string, abi: any[]): Contract;
 	sendSignedTransaction(serializedTx: IBuffer, options?: STOptions): Promise<TransactionReceipt>;
 	getBlockNumber(): Promise<number>;
@@ -194,6 +195,11 @@ export class Web3Z implements IWeb3Z {
 			this._web3 = new __Web3__(provider);
 		}
 		return this._web3 as __Web3__;
+	}
+
+	setDefaultAccount(account: string) {
+		this.web3.defaultAccount = account;
+		this.web3.eth.defaultAccount = account;
 	}
 
 	async getDefaultAccount() {
