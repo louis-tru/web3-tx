@@ -37,7 +37,7 @@ import * as net from 'net';
 import {Contract as ContractRaw, Options as ContractOptions, 
 	EventData, CallOptions, SendOptions, ContractSendMethod as ContractSendMethodRaw } from 'web3-eth-contract';
 import {Transaction,TransactionReceipt,provider,PromiEvent } from 'web3-core';
-import {BlockTransactionString as Block, TransactionConfig} from 'web3-eth';
+import {BlockTransactionString as Block} from 'web3-eth';
 
 import './_fix_web3';
 
@@ -187,7 +187,7 @@ export class Web3Z implements IWeb3Z {
 	get web3() {
 		if (!this._web3) {
 			var provider = this.getProvider();
-			var { HttpProvider, WebsocketProvider, IpcProvider } = __Web3__.providers;
+			var { HttpProvider, WebsocketProvider, IpcProvider } = Web3.providers;
 			if (typeof provider == 'string') {
 				if (/^https?:/.test(provider)) { // http
 					provider = new HttpProvider(provider, { timeout: SAFE_TRANSACTION_MAX_TIMEOUT });
