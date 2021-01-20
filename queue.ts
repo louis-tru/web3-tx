@@ -176,7 +176,7 @@ export class TransactionQueue {
 		var gasLimit = this._host.gasLimit;
 
 		for (var i = nonce, o: Nonce; (o = nonces[i]); i++) {
-			if (o.timeout > now) { // pending and is timeout
+			if (now > o.timeout) { // pending and is timeout
 				o.timeout = now;
 				o.gasLimit++;
 				return o;
@@ -184,7 +184,7 @@ export class TransactionQueue {
 		}
 
 		if (greedy || nonce == i) {
-			nonces[i] = o = { from, nonce, timeout, gasLimit };
+			nonces[i] = o = { from, nonce: i, timeout, gasLimit };
 		} else {
 			return null;
 		}
