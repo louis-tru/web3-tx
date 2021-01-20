@@ -199,7 +199,7 @@ export class Web3Z implements IWeb3Z {
 					throw Error(`Can't create 'Web3 provider`);
 				}
 			}
-			this._web3 = new __Web3__(provider);
+			this._web3 = new Web3(provider);
 		}
 		return this._web3 as __Web3__;
 	}
