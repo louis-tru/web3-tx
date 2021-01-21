@@ -177,19 +177,17 @@ export class TransactionQueue {
 
 		for (var i = nonce, o: Nonce; (o = nonces[i]); i++) {
 			if (now > o.timeout) { // pending and is timeout
-				o.timeout = now;
+				o.timeout = now + timeout;
 				o.gasLimit++;
 				return o;
 			}
 		}
 
 		if (greedy || nonce == i) {
-			nonces[i] = o = { from, nonce: i, timeout, gasLimit };
-		} else {
-			return null;
+			return o = nonces[i] = { from, nonce: i, timeout, gasLimit };
 		}
 
-		return o;
+		return null;
 	}
 
 	/**
