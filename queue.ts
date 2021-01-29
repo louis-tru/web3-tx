@@ -42,7 +42,7 @@ export interface DeOptions {
 	gasLimit: number;
 }
 
-interface Nonce extends DeOptions {
+export interface Nonce extends DeOptions {
 	timeout: number;
 }
 
