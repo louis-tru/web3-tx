@@ -32,7 +32,7 @@ import utils from 'somes';
 import buffer, {IBuffer} from 'somes/buffer';
 import errno from './errno';
 import './_fix_contract';
-import __Web3__ from 'web3';
+import Web3 from 'web3';
 import * as net from 'net';
 import {Contract as ContractRaw, Options as ContractOptions, 
 	EventData, CallOptions, SendOptions, ContractSendMethod as ContractSendMethodRaw } from 'web3-eth-contract';
@@ -41,7 +41,7 @@ import {BlockTransactionString as Block} from 'web3-eth';
 
 import './_fix_web3';
 
-const Web3 = require('web3') as typeof __Web3__;
+const __Web3__ = require('web3') as typeof Web3;
 
 export { Web3, ContractOptions, EventData, Transaction, TransactionReceipt, Block, CallOptions, SendOptions };
 
@@ -52,6 +52,8 @@ const TRANSACTION_MAX_BLOCK_RANGE = 32;
 const TRANSACTION_CHECK_TIME = 1e4; // 10秒
 const DEFAULT_GAS_LIMIT = 1e8;
 const DEFAULT_GAS_PRICE = 1e5;
+
+exports.Web3 = __Web3__;
 
 export interface FindEventResult {
 	event: EventData;
@@ -107,7 +109,7 @@ export interface SerializedTx {
 }
 
 export interface IWeb3Z {
-	readonly web3: __Web3__;
+	readonly web3: Web3;
 	readonly gasLimit: number;
 	readonly gasPrice: number;
 	getDefaultAccount(): Promise<string>;
@@ -176,7 +178,7 @@ class TransactionPromiseIMPL extends utils.PromiseNx<TransactionReceipt> impleme
 export class Web3Z implements IWeb3Z {
 	private _gasLimit = DEFAULT_GAS_LIMIT;
 	private _gasPrice = DEFAULT_GAS_PRICE;
-	private _web3?: __Web3__;
+	private _web3?: Web3;
 
 	TRANSACTION_CHECK_TIME = TRANSACTION_CHECK_TIME;
 
@@ -187,7 +189,7 @@ export class Web3Z implements IWeb3Z {
 	get web3() {
 		if (!this._web3) {
 			var provider = this.getProvider();
-			var { HttpProvider, WebsocketProvider, IpcProvider } = Web3.providers;
+			var { HttpProvider, WebsocketProvider, IpcProvider } = __Web3__.providers;
 			if (typeof provider == 'string') {
 				if (/^https?:/.test(provider)) { // http
 					provider = new HttpProvider(provider, { timeout: SAFE_TRANSACTION_MAX_TIMEOUT });
@@ -199,9 +201,9 @@ export class Web3Z implements IWeb3Z {
 					throw Error(`Can't create 'Web3 provider`);
 				}
 			}
-			this._web3 = new Web3(provider);
+			this._web3 = new __Web3__(provider);
 		}
-		return this._web3 as __Web3__;
+		return this._web3 as Web3;
 	}
 
 	setDefaultAccount(account: string) {
