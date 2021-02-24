@@ -549,7 +549,7 @@ export class Web3Z implements IWeb3Z {
 		return await utils.timeout(this.eth.getBlockNumber(), 1e4);
 	}
 
-	async getNonce(account?: string) {
+	async getNonce(account?: string): Promise<number> {
 		return await this.eth.getTransactionCount(account || await this.getDefaultAccount(), 'latest');
 	}
 }
