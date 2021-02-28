@@ -3,7 +3,7 @@
 	"version": "1.3.5",
 	"description": "",
 	"main": "index.js",
-	"types": "index.ts",
+	"types": "index",
 	"author": "louistru@hotmail.com",
 	"scripts": {
 		"build": "tsc && cp LICENSE *.md out/web3z && node _.js"
@@ -12,7 +12,7 @@
 		"@types/node": "~12.12.20"
 	},
 	"dependencies": {
-		"somes": "~0.10.113",
+		"somes": "~0.10.116",
 		"web3": "~1.2.8",
 		"bignumber.js": "~9.0.0",
 		"crypto-tx": "~0.4.0"
