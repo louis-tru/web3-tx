@@ -36,8 +36,10 @@ import './_fix_contract';
 import './_fix_web3';
 import Web3 from 'web3';
 import * as net from 'net';
-import {Contract as ContractRaw, Options as ContractOptions, 
-	EventData, CallOptions, SendOptions, ContractSendMethod as ContractSendMethodRaw } from 'web3-eth-contract';
+import {
+	Contract as ContractRaw, Options as ContractOptions, 
+	EventData, CallOptions, SendOptions,
+	ContractSendMethod as ContractSendMethodRaw } from 'web3-eth-contract';
 import {Transaction,TransactionReceipt} from 'web3-core';
 import {BlockTransactionString as Block} from 'web3-eth';
 
@@ -381,7 +383,7 @@ export abstract class Web3Z implements IWeb3Z {
 				if (!completed) {
 					completed = true;
 					console.log('send signed Transaction complete', id, err, receipt);
-					err ? reject(err): resolve(receipt);
+					err ? reject(err): resolve(receipt as TransactionReceipt);
 				}
 			}
 
