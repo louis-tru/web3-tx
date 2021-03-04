@@ -172,6 +172,7 @@ export class TransactionQueue {
 		var now = Date.now();
 		var nonces = (this._tx_nonceObjs[from] || (this._tx_nonceObjs[from] = {}));
 		var nonce = await this._host.getNonce(from);
+		// var nonce_pending = await this._host.getNonce(from, 'pending');
 		var timeout = Math.min(TRANSACTION_NONCE_TIMEOUT_MAX, _timeout || TRANSACTION_NONCE_TIMEOUT) + now;
 		var gasLimit = this._host.gasLimit;
 

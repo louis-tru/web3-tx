@@ -117,7 +117,7 @@ export interface IWeb3Z {
 	sendSignTransaction(tx: TxOptions): Promise<TransactionReceipt>;
 	sendSignedTransaction(serializedTx: IBuffer, opts?: STOptions): Promise<TransactionReceipt>;
 	getBlockNumber(): Promise<number>;
-	getNonce(account?: string): Promise<number>;
+	getNonce(account?: string, blockNumber?: 'latest' | 'pending'): Promise<number>;
 	sign?(message: IBuffer, account?: string): Promise<Signature> | Signature;
 	signTx(opts?: TxOptions): Promise<SerializedTx>;
 }
@@ -547,7 +547,7 @@ export class Web3Z implements IWeb3Z {
 		return await utils.timeout(this.eth.getBlockNumber(), 1e4);
 	}
 
-	async getNonce(account?: string): Promise<number> {
-		return await this.eth.getTransactionCount(account || await this.getDefaultAccount(), 'latest');
+	async getNonce(account?: string, blockNumber?: 'latest' | 'pending'): Promise<number> {
+		return await this.eth.getTransactionCount(account || await this.getDefaultAccount(), blockNumber || 'latest');
 	}
 }
