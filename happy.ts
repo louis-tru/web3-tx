@@ -4,7 +4,7 @@
  */
 
 import somes from 'somes';
-import {IWeb3Z, Web3Z} from './index';
+import {IWeb3Z, Web3Z, TransactionPromise, TransactionPromiseIMPL} from './index';
 import {TransactionQueue} from './queue';
 import {AbiItem, AbiOutput} from 'web3-utils/types';
 import { Contract, ContractSendMethod } from './index';
@@ -23,6 +23,7 @@ export interface SolidityInfo {
  * @class HappyContract<T> 快乐的调用协约
  */
 export default class HappyContract<T> {
+	private static _contracts: Dict<HappyContract<any>> = {};
 	private _contract: Contract;
 	private _methods: Dict<ContractMethod>;
 	private _abis: Dict<AbiItem>;
@@ -110,74 +111,96 @@ export default class HappyContract<T> {
 		return new_data;
 	}
 
-	happy(from?: string): T {
+	private async _abiCall(prop: string, args: any[], opts?: { from?: string, value?: string }) {
+		var {_web3} = this;
+		var abi = this._abis[prop];
+		var methods = this._methods;
+		var method = this._methods[prop];
+
+		opts = opts || {};
+		opts.from = opts.from || await _web3.getDefaultAccount();
+
+		// call
+		var rawOutputs = await method.apply(methods, args).call(opts as any);
+		var abiOutputs = abi.outputs as AbiOutput[];
+		var outputs = this._parseOutputs(rawOutputs, abiOutputs);
+
+		if (abiOutputs.length) {
+			if (outputs.length == 1) {
+				return outputs[0];
+			} else if (outputs.length === 0) {
+				return void(0);
+			} else {
+				var newOutputs = {} as Dict;
+				var newOutputs_len = 0;
+				for (var i = 0; i < abiOutputs.length; i++) {
+					var item = outputs[i];
+					var out = abiOutputs[i];
+					if (out.name) {
+						newOutputs_len++;
+						newOutputs[out.name] = item;
+					}
+				}
+				if (newOutputs_len > 1 && newOutputs_len == outputs.length) {
+					return newOutputs;
+				} else {
+					return outputs;
+				}
+			}
+		}
+	}
+
+	private async _abiPost(prop: string, args: any[], opts?: { from?: string, value?: string }) {
 		var {_queue,_web3} = this;
+		var methods = this._methods;
+		var method = this._methods[prop];
+
+		return TransactionPromiseIMPL.proxy(async ()=>{
+			opts = opts || {};
+			opts.from = opts.from || await _web3.getDefaultAccount();
+			var receipt: any;
+			// post
+			if (_web3.sign) {
+				if (_queue) {
+					receipt = _queue.push(e=>method.apply(methods, args).sendSignTransaction({...opts, ...e}), opts);
+				} else {
+					receipt = method.apply(methods, args).sendSignTransaction(opts);
+				}
+			} else {
+				if (_queue) {
+					receipt = _queue.push(e=>method.apply(methods, args).send2({...opts, ...e}), opts);
+				} else {
+					receipt = method.apply(methods, args).send2(opts);
+				}
+			}
+			return {promise: receipt};
+		});
+	}
+
+	happy(opts?: { from?: string, value?: string }): T {
 		return new Proxy(this, {
 			get(target: HappyContract<T>, p: PropertyKey, receiver: any) {
 
 				var prop = String(p);
-				var abi = target._abis[prop];
 				var method = target._methods[prop];
+				somes.assert(method, 'Contract method not found ');
 
-				if (!method) {
-					return;
+				function func(...args: any[]) {
+					return target._abiCall(prop, args, opts);
 				}
 
-				return async function(...args: any[]) {
-					from = from || await _web3.getDefaultAccount();
+				func.post = function(...args: any[]) {
+					return target._abiPost(prop, args, opts);
+				};
 
-					if ( (abi.stateMutability as string).indexOf('view') == -1 ) {
-						if (_web3.sign) {
-							if (_queue) {
-								var receipt = await _queue.push(e=>method.apply(target._methods, args).sendSignTransaction(e), {from});
-							} else {
-								var receipt = await method.apply(target._methods, args).sendSignTransaction({from});
-							}
-						} else {
-							if (_queue) {
-								var receipt = await _queue.push(e=>method.apply(target._methods, args).send2(e), {from});
-							} else {
-								var receipt = await method.apply(target._methods, args).send2({from});
-							}
-						}
-						return receipt;
-					}
-					else {
-						var rawOutputs = await method.apply(target._methods, args).call({from});
-						var abiOutputs = abi.outputs as AbiOutput[];
-						var outputs = target._parseOutputs(rawOutputs, abiOutputs);
-
-						if (abiOutputs.length) {
-							if (outputs.length == 1) {
-								return outputs[0];
-							} else if (outputs.length === 0) {
-								return void(0);
-							} else {
-								var newOutputs = {} as Dict;
-								var newOutputs_len = 0;
-								for (var i = 0; i < abiOutputs.length; i++) {
-									var item = outputs[i];
-									var out = abiOutputs[i];
-									if (out.name) {
-										newOutputs_len++;
-										newOutputs[out.name] = item;
-									}
-								}
-								if (newOutputs_len > 1 && newOutputs_len == outputs.length) {
-									return newOutputs;
-								} else {
-									return outputs;
-								}
-							}
-						}
-					}
-				}
-				// function end
+				return func;
 			}
 		}) as unknown as T;
 	}
 
-	private static _contracts: Dict<HappyContract<any>> = {};
+	post<A extends any[]>(func: (...args: A)=>any, ...args: A): TransactionPromise {
+		return (func as any).post(...args);
+	}
 
 	static instance<T>(info: SolidityInfo, web3: Web3Z | TransactionQueue): HappyContract<T> {
 		if (!this._contracts[info.contractName])

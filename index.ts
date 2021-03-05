@@ -150,7 +150,7 @@ export interface TransactionPromise extends Promise<TransactionReceipt> {
 	hash(cb: (hash: string)=>void): this;
 }
 
-class TransactionPromiseIMPL extends utils.PromiseNx<TransactionReceipt> implements TransactionPromise {
+export class TransactionPromiseIMPL extends utils.PromiseNx<TransactionReceipt> implements TransactionPromise {
 	private _hash?: (hash: string)=>void;
 	hash(cb: (hash: string)=>void) {
 		this._hash = cb;
