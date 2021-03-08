@@ -285,15 +285,35 @@ export class Web3Z implements IWeb3Z {
 			});
 		}
 
+		async function call(func: any, opts?: CallOptions) {
+			try {
+				return await func(opts);
+			} catch(err) {
+				var mark = 'Internal JSON-RPC error.';
+				if (err.message.indexOf(mark) == 0) {
+					var msg = JSON.parse(err.message.substr(mark.length));
+					if (msg.data.indexOf('Reverted 0x') == 0) {
+						var data = buffer.from(msg.data.substr('Reverted 0x'.length), 'hex')
+						var str = data.toString('');
+						// console.error('----------------', str);
+						err = Error.new({ errno: msg.code, message: msg.message, description: str });
+					}
+				}
+				throw err;
+			}
+		}
+
 		// TODO extend method signedTransaction() and sendSignedTransaction()
 		abi.forEach(function({ name }) {
 			var { methods } = contract;
 			var raw = methods[name];
 			methods[name] = (...args: any[])=>{
 				var method = raw.call(methods, ...args) as ContractSendMethod;
+				var func = method.call;
 				method.signTx = e=>signTx(method, e),
 				method.sendSignTransaction = e=>sendSignTransaction(method, e);
 				method.post = e=>post(method, e);
+				method.call = e=>call(func, e);
 				return method;
 			};
 		});

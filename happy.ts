@@ -4,7 +4,7 @@
  */
 
 import somes from 'somes';
-import {IWeb3Z, Web3Z, TransactionPromise, TransactionPromiseIMPL} from './index';
+import {IWeb3Z, Web3Z, TransactionPromise, TransactionPromiseIMPL, FindEventResult, TransactionReceipt, EventData} from './index';
 import {TransactionQueue} from './queue';
 import {AbiItem, AbiOutput} from 'web3-utils/types';
 import { Contract, ContractSendMethod } from './index';
@@ -209,6 +209,21 @@ export default class HappyContract<T> {
 
 	get address(): string {
 		return this._contract.options.address;
+	}
+
+	async findEvent(event: string, blockNumber: number, transactionHash: string): Promise<EventData | null> {
+		var evt = await this._contract.findEvent(event, blockNumber, transactionHash);
+		return evt?.event || null;
+	}
+
+	async findEventFromReceipt(event: string, receipt: TransactionReceipt): Promise<EventData> {
+		if (receipt.events && receipt.events[event]) {
+			return receipt.events[event] as EventData;
+		} else {
+			var evt = await this.findEvent(event, receipt.blockNumber, receipt.transactionHash);
+			somes.assert(evt, `not event Sell ${event}`);
+			return evt as EventData;
+		}
 	}
 
 	static instance<T>(info: SolidityInfo, web3: Web3Z | TransactionQueue, name?: string): HappyContract<T> {
