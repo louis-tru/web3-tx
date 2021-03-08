@@ -207,10 +207,15 @@ export default class HappyContract<T> {
 		return this._apis as any;
 	}
 
-	static instance<T>(info: SolidityInfo, web3: Web3Z | TransactionQueue): HappyContract<T> {
-		if (!this._contracts[info.contractName])
-			this._contracts[info.contractName] = new HappyContract<T>(info, web3);
-		return this._contracts[info.contractName];
+	get address(): string {
+		return this._contract.options.address;
+	}
+
+	static instance<T>(info: SolidityInfo, web3: Web3Z | TransactionQueue, name?: string): HappyContract<T> {
+		var contractName = name || info.contractName;
+		if (!this._contracts[contractName])
+			this._contracts[contractName] = new HappyContract<T>(info, web3);
+		return this._contracts[contractName];
 	}
 
 }
