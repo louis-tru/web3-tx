@@ -19,6 +19,20 @@ export interface SolidityInfo {
 	contractAddress: string;
 }
 
+export interface Opts {
+	from?: string;
+	value?: string;
+	gasPrice?: number;
+	gasLimit?: number;
+}
+
+export interface Result<T> {
+	post(opts?: Opts): TransactionPromise;
+	call(opts?: Opts): Promise<T>;
+	estimateGas(opts?: Opts): Promise<number>;
+	encodeABI(): string;
+}
+
 /**
  * @class HappyContract<T> 快乐的调用协约
  */
@@ -27,6 +41,7 @@ export default class HappyContract<T> {
 	private _contract: Contract;
 	private _methods: Dict<ContractMethod>;
 	private _abis: Dict<AbiItem>;
+	private _apis?: T;
 	private _info: SolidityInfo;
 	private _web3: IWeb3Z;
 	private _queue?: TransactionQueue;
@@ -111,17 +126,15 @@ export default class HappyContract<T> {
 		return new_data;
 	}
 
-	private async _abiCall(prop: string, args: any[], opts?: { from?: string, value?: string }) {
+	private async _abiCall(prop: string, method: ContractSendMethod, opts?: Opts) {
 		var {_web3} = this;
 		var abi = this._abis[prop];
-		var methods = this._methods;
-		var method = this._methods[prop];
 
 		opts = opts || {};
 		opts.from = opts.from || await _web3.getDefaultAccount();
 
 		// call
-		var rawOutputs = await method.apply(methods, args).call(opts as any);
+		var rawOutputs = await method.call(opts as any);
 		var abiOutputs = abi.outputs as AbiOutput[];
 		var outputs = this._parseOutputs(rawOutputs, abiOutputs);
 
@@ -150,10 +163,8 @@ export default class HappyContract<T> {
 		}
 	}
 
-	private async _abiPost(prop: string, args: any[], opts?: { from?: string, value?: string }) {
+	private async _abiPost(method: ContractSendMethod, opts?: Opts) {
 		var {_queue,_web3} = this;
-		var methods = this._methods;
-		var method = this._methods[prop];
 
 		return TransactionPromiseIMPL.proxy(async ()=>{
 			opts = opts || {};
@@ -162,44 +173,38 @@ export default class HappyContract<T> {
 			// post
 			if (_web3.sign) {
 				if (_queue) {
-					receipt = _queue.push(e=>method.apply(methods, args).sendSignTransaction({...opts, ...e}), opts);
+					receipt = _queue.push(e=>method.sendSignTransaction({...opts, ...e}), opts);
 				} else {
-					receipt = method.apply(methods, args).sendSignTransaction(opts);
+					receipt = method.sendSignTransaction(opts);
 				}
 			} else {
 				if (_queue) {
-					receipt = _queue.push(e=>method.apply(methods, args).send2({...opts, ...e}), opts);
+					receipt = _queue.push(e=>method.post({...opts, ...e}), opts);
 				} else {
-					receipt = method.apply(methods, args).send2(opts);
+					receipt = method.post(opts);
 				}
 			}
 			return {promise: receipt};
 		});
 	}
 
-	happy(opts?: { from?: string, value?: string }): T {
-		return new Proxy(this, {
-			get(target: HappyContract<T>, p: PropertyKey, receiver: any) {
+	get api(): T {
+		if (!this._apis) {
+			var self = this;
+			var methods = this._methods;
+			var apis = this._apis = {} as any;
 
-				var prop = String(p);
-				var method = target._methods[prop];
-				somes.assert(method, 'Contract method not found ');
-
-				function func(...args: any[]) {
-					return target._abiCall(prop, args, opts);
-				}
-
-				func.post = function(...args: any[]) {
-					return target._abiPost(prop, args, opts);
+			Object.entries(methods).forEach(function([name, func]) {
+				apis[name] = (...args: any[])=>{
+					var method = func.call(methods, ...args) as ContractSendMethod;
+					var api = Object.create(method);
+					api.call = (e: any)=>self._abiCall(name, method, e);
+					api.post = (e: any)=>self._abiPost(method, e);
+					return api;
 				};
-
-				return func;
-			}
-		}) as unknown as T;
-	}
-
-	post<A extends any[]>(func: (...args: A)=>any, ...args: A): TransactionPromise {
-		return (func as any).post(...args);
+			});
+		}
+		return this._apis as any;
 	}
 
 	static instance<T>(info: SolidityInfo, web3: Web3Z | TransactionQueue): HappyContract<T> {

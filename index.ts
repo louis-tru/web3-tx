@@ -80,9 +80,9 @@ export interface ContractSendMethod extends ContractSendMethodRaw {
 	/**
 	 * returns serializedTx
 	 */
-	signTx(options?: TxOptions): Promise<SerializedTx>;
-	sendSignTransaction(options?: TxOptions): TransactionPromise;
-	send2(opts: TxOptions): TransactionPromise;
+	signTx(opts?: TxOptions): Promise<SerializedTx>;
+	sendSignTransaction(opts?: TxOptions): TransactionPromise;
+	post(opts?: TxOptions): TransactionPromise;
 }
 
 export interface ContractMethod {
@@ -275,7 +275,7 @@ export class Web3Z implements IWeb3Z {
 			});
 		}
 
-		function send2(method: ContractSendMethod, opts?: TxOptions) {
+		function post(method: ContractSendMethod, opts?: TxOptions) {
 			return TransactionPromiseIMPL.proxy(async ()=>{
 				var from = opts?.from || await self.getDefaultAccount();
 				var opts_ = Object.assign(opts, {from}) as SendOptions;
@@ -293,7 +293,7 @@ export class Web3Z implements IWeb3Z {
 				var method = raw.call(methods, ...args) as ContractSendMethod;
 				method.signTx = e=>signTx(method, e),
 				method.sendSignTransaction = e=>sendSignTransaction(method, e);
-				method.send2 = e=>send2(method, e);
+				method.post = e=>post(method, e);
 				return method;
 			};
 		});
