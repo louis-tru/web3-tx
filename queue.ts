@@ -144,6 +144,8 @@ export class TransactionQueue {
 							await utils.sleep(5e3); // sleep 5s
 						}
 					} catch(err) {
+						if (nonce)
+							nonce.timeout = 0;
 						if (ctx.retry--) {
 							console.error(err);
 							queue.list.push(ctx); // retry back
