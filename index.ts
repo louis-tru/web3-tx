@@ -54,7 +54,7 @@ const DEFAULT_GAS_LIMIT = 1e8;
 const DEFAULT_GAS_PRICE = 1e5;
 
 export interface FindEventResult {
-	event: EventData;
+	events: EventData[];
 	transaction: Transaction;
 }
 
@@ -337,7 +337,7 @@ export class Web3Z implements IWeb3Z {
 		// read event data
 		var tx: Transaction | null = null;
 		var transactionIndex: number;
-		var event: EventData | undefined;
+		// var event: EventData | undefined;
 		var events: EventData[];
 
 		while (j--) { // 重试10次,10次后仍然不能从链上查询到txid,丢弃
@@ -371,11 +371,11 @@ export class Web3Z implements IWeb3Z {
 					fromBlock: blockNumber, toBlock: blockNumber,
 				});
 				if (events.some(e=>e.transactionHash)) { // have transactionHash
-					event = events.find(e=>e.transactionHash==transactionHash);
+					events = events.filter(e=>e.transactionHash==transactionHash);
 				} else {
-					event = events.find(e=>e.blockHash==transaction.blockHash&&e.transactionIndex==transactionIndex);
+					events = events.filter(e=>e.blockHash==transaction.blockHash&&e.transactionIndex==transactionIndex);
 				}
-				return event ? { event: event as EventData, transaction }: null;
+				return { events, transaction };
 			} catch(err) {
 				if (j)
 					await utils.sleep(1e3);

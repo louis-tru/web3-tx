@@ -211,19 +211,22 @@ export default class HappyContract<T> {
 		return this._contract.options.address;
 	}
 
-	async findEvent(event: string, blockNumber: number, transactionHash: string): Promise<EventData | null> {
+	async findEvent(event: string, blockNumber: number, transactionHash: string): Promise<EventData[] | null> {
 		var evt = await this._contract.findEvent(event, blockNumber, transactionHash);
-		return evt?.event || null;
+		return evt?.events || null;
 	}
 
-	async findEventFromReceipt(event: string, receipt: TransactionReceipt): Promise<EventData> {
-		if (receipt.events && receipt.events[event]) {
-			return receipt.events[event] as EventData;
-		} else {
-			var evt = await this.findEvent(event, receipt.blockNumber, receipt.transactionHash);
-			somes.assert(evt, `not event Sell ${event}`);
-			return evt as EventData;
-		}
+	async findEventFromReceipt(event: string, receipt: TransactionReceipt): Promise<EventData[]> {
+		var evt: EventData[] = [];
+		// if (receipt.events && receipt.events[event]) {
+		// 	evt = receipt.events[event] as any as EventData[];
+		// 	if (!Array.isArray(receipt.events[event]))
+		// 		evt = [receipt.events[event] as EventData];
+		// } else {
+			evt = await this.findEvent(event, receipt.blockNumber, receipt.transactionHash) as EventData[];
+		// }
+		somes.assert(evt.length, `not event Sell ${event}`);
+		return evt;
 	}
 
 	static instance<T>(info: SolidityInfo, web3: Web3Z | TransactionQueue, name?: string): HappyContract<T> {
