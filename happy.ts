@@ -38,13 +38,27 @@ export interface Result<T> {
  */
 export default class HappyContract<T> {
 	private static _contracts: Dict<HappyContract<any>> = {};
-	private _contract: Contract;
-	private _methods: Dict<ContractMethod>;
+	private __contract?: Contract;
+	private __methods?: Dict<ContractMethod>;
 	private _abis: Dict<AbiItem>;
 	private _apis?: T;
 	private _info: SolidityInfo;
 	private _web3: IWeb3Z;
 	private _queue?: TransactionQueue;
+
+	private get _contract() { 
+		if (!this.__contract) {
+			this.__contract = this._web3.createContract(this._info.contractAddress, this._info.abi);
+		}
+		return this.__contract;
+	}
+
+	private get _methods() { 
+		if (!this.__methods) {
+			this.__methods = this._contract.methods;
+		}
+		return this.__methods;
+	}
 
 	constructor(info: SolidityInfo, web3: Web3Z | TransactionQueue) {
 		this._info = info;
@@ -59,8 +73,6 @@ export default class HappyContract<T> {
 		for (var abi of this._info.abi) {
 			this._abis[String(abi.name)] = abi;
 		}
-		this._contract = this._web3.createContract(this._info.contractAddress, this._info.abi);
-		this._methods = this._contract.methods;
 	}
 
 	get contract() {
@@ -208,7 +220,7 @@ export default class HappyContract<T> {
 	}
 
 	get address(): string {
-		return this._contract.options.address;
+		return this._info.contractAddress;
 	}
 
 	async findEvent(event: string, blockNumber: number, transactionHash: string): Promise<EventData[] | null> {
