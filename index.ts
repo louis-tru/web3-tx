@@ -32,7 +32,7 @@ import utils from 'somes';
 import buffer, {IBuffer} from 'somes/buffer';
 import errno from './errno';
 import './_fix_contract';
-import __Web3 from 'web3';
+import Web3 from 'web3';
 import * as net from 'net';
 import {Contract as ContractRaw, Options as ContractOptions, 
 	EventData, CallOptions, SendOptions, ContractSendMethod as ContractSendMethodRaw } from 'web3-eth-contract';
@@ -41,9 +41,9 @@ import {BlockTransactionString as Block} from 'web3-eth';
 
 import './_fix_web3';
 
-export class Web3 extends (require('web3') as typeof __Web3) {};
+const __Web3__ = require('web3') as typeof Web3;
 
-export { ContractOptions, EventData, Transaction, TransactionReceipt, Block, CallOptions, SendOptions };
+export { Web3, ContractOptions, EventData, Transaction, TransactionReceipt, Block, CallOptions, SendOptions };
 
 const crypto_tx = require('crypto-tx');
 
@@ -53,8 +53,10 @@ const TRANSACTION_CHECK_TIME = 1e4; // 10秒
 const DEFAULT_GAS_LIMIT = 1e8;
 const DEFAULT_GAS_PRICE = 1e5;
 
+exports.Web3 = __Web3__;
+
 export interface FindEventResult {
-	events: EventData[];
+	event: EventData;
 	transaction: Transaction;
 }
 
@@ -80,9 +82,9 @@ export interface ContractSendMethod extends ContractSendMethodRaw {
 	/**
 	 * returns serializedTx
 	 */
-	signTx(opts?: TxOptions): Promise<SerializedTx>;
-	sendSignTransaction(opts?: TxOptions): TransactionPromise;
-	post(opts?: TxOptions): TransactionPromise;
+	signTx(options?: TxOptions): Promise<SerializedTx>;
+	sendSignTransaction(options?: TxOptions): TransactionPromise;
+	send2(opts: TxOptions): TransactionPromise;
 }
 
 export interface ContractMethod {
@@ -117,7 +119,7 @@ export interface IWeb3Z {
 	sendSignTransaction(tx: TxOptions): Promise<TransactionReceipt>;
 	sendSignedTransaction(serializedTx: IBuffer, opts?: STOptions): Promise<TransactionReceipt>;
 	getBlockNumber(): Promise<number>;
-	getNonce(account?: string, blockNumber?: 'latest' | 'pending'): Promise<number>;
+	getNonce(account?: string): Promise<number>;
 	sign?(message: IBuffer, account?: string): Promise<Signature> | Signature;
 	signTx(opts?: TxOptions): Promise<SerializedTx>;
 }
@@ -150,7 +152,7 @@ export interface TransactionPromise extends Promise<TransactionReceipt> {
 	hash(cb: (hash: string)=>void): this;
 }
 
-export class TransactionPromiseIMPL extends utils.PromiseNx<TransactionReceipt> implements TransactionPromise {
+class TransactionPromiseIMPL extends utils.PromiseNx<TransactionReceipt> implements TransactionPromise {
 	private _hash?: (hash: string)=>void;
 	hash(cb: (hash: string)=>void) {
 		this._hash = cb;
@@ -187,7 +189,7 @@ export class Web3Z implements IWeb3Z {
 	get web3() {
 		if (!this._web3) {
 			var provider = this.getProvider();
-			var { HttpProvider, WebsocketProvider, IpcProvider } = Web3.providers;
+			var { HttpProvider, WebsocketProvider, IpcProvider } = __Web3__.providers;
 			if (typeof provider == 'string') {
 				if (/^https?:/.test(provider)) { // http
 					provider = new HttpProvider(provider, { timeout: SAFE_TRANSACTION_MAX_TIMEOUT });
@@ -199,7 +201,7 @@ export class Web3Z implements IWeb3Z {
 					throw Error(`Can't create 'Web3 provider`);
 				}
 			}
-			this._web3 = new Web3(provider);
+			this._web3 = new __Web3__(provider);
 		}
 		return this._web3 as Web3;
 	}
@@ -275,7 +277,7 @@ export class Web3Z implements IWeb3Z {
 			});
 		}
 
-		function post(method: ContractSendMethod, opts?: TxOptions) {
+		function send2(method: ContractSendMethod, opts?: TxOptions) {
 			return TransactionPromiseIMPL.proxy(async ()=>{
 				var from = opts?.from || await self.getDefaultAccount();
 				var opts_ = Object.assign(opts, {from}) as SendOptions;
@@ -285,35 +287,15 @@ export class Web3Z implements IWeb3Z {
 			});
 		}
 
-		async function call(func: any, opts?: CallOptions) {
-			try {
-				return await func(opts);
-			} catch(err) {
-				var mark = 'Internal JSON-RPC error.';
-				if (err.message.indexOf(mark) == 0) {
-					var msg = JSON.parse(err.message.substr(mark.length));
-					if (msg.data.indexOf('Reverted 0x') == 0) {
-						var data = buffer.from(msg.data.substr('Reverted 0x'.length), 'hex')
-						var str = data.toString('');
-						// console.error('----------------', str);
-						err = Error.new({ errno: msg.code, message: msg.message, description: str });
-					}
-				}
-				throw err;
-			}
-		}
-
 		// TODO extend method signedTransaction() and sendSignedTransaction()
 		abi.forEach(function({ name }) {
 			var { methods } = contract;
 			var raw = methods[name];
 			methods[name] = (...args: any[])=>{
 				var method = raw.call(methods, ...args) as ContractSendMethod;
-				var func = method.call;
 				method.signTx = e=>signTx(method, e),
 				method.sendSignTransaction = e=>sendSignTransaction(method, e);
-				method.post = e=>post(method, e);
-				method.call = e=>call(func, e);
+				method.send2 = e=>send2(method, e);
 				return method;
 			};
 		});
@@ -337,7 +319,7 @@ export class Web3Z implements IWeb3Z {
 		// read event data
 		var tx: Transaction | null = null;
 		var transactionIndex: number;
-		// var event: EventData | undefined;
+		var event: EventData | undefined;
 		var events: EventData[];
 
 		while (j--) { // 重试10次,10次后仍然不能从链上查询到txid,丢弃
@@ -371,11 +353,11 @@ export class Web3Z implements IWeb3Z {
 					fromBlock: blockNumber, toBlock: blockNumber,
 				});
 				if (events.some(e=>e.transactionHash)) { // have transactionHash
-					events = events.filter(e=>e.transactionHash==transactionHash);
+					event = events.find(e=>e.transactionHash==transactionHash);
 				} else {
-					events = events.filter(e=>e.blockHash==transaction.blockHash&&e.transactionIndex==transactionIndex);
+					event = events.find(e=>e.blockHash==transaction.blockHash&&e.transactionIndex==transactionIndex);
 				}
-				return { events, transaction };
+				return event ? { event: event as EventData, transaction }: null;
 			} catch(err) {
 				if (j)
 					await utils.sleep(1e3);
@@ -567,7 +549,7 @@ export class Web3Z implements IWeb3Z {
 		return await utils.timeout(this.eth.getBlockNumber(), 1e4);
 	}
 
-	async getNonce(account?: string, blockNumber?: 'latest' | 'pending'): Promise<number> {
-		return await this.eth.getTransactionCount(account || await this.getDefaultAccount(), blockNumber || 'latest');
+	async getNonce(account?: string): Promise<number> {
+		return await this.eth.getTransactionCount(account || await this.getDefaultAccount(), 'latest');
 	}
 }

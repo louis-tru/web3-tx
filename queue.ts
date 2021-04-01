@@ -144,8 +144,6 @@ export class TransactionQueue {
 							await utils.sleep(5e3); // sleep 5s
 						}
 					} catch(err) {
-						if (nonce)
-							nonce.timeout = 0;
 						if (ctx.retry--) {
 							console.error(err);
 							queue.list.push(ctx); // retry back
@@ -173,14 +171,13 @@ export class TransactionQueue {
 
 		var now = Date.now();
 		var nonces = (this._tx_nonceObjs[from] || (this._tx_nonceObjs[from] = {}));
-		var nonce = await this._host.getNonce(from);
-		// var nonce_pending = await this._host.getNonce(from, 'pending');
+		var nonce = await this._host.getNonce(account);
 		var timeout = Math.min(TRANSACTION_NONCE_TIMEOUT_MAX, _timeout || TRANSACTION_NONCE_TIMEOUT) + now;
 		var gasLimit = this._host.gasLimit;
 
 		for (var i = nonce, o: Nonce; (o = nonces[i]); i++) {
 			if (now > o.timeout) { // pending and is timeout
-				o.timeout = timeout;
+				o.timeout = now + timeout;
 				o.gasLimit++;
 				return o;
 			}
