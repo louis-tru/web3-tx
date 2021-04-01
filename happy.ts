@@ -46,13 +46,13 @@ export default class HappyContract<T> {
 	private _web3: IWeb3Z;
 	private _queue?: TransactionQueue;
 
-	constructor(info: SolidityInfo, web3: Web3Z | TransactionQueue) {
+	constructor(info: SolidityInfo, web3: IWeb3Z | TransactionQueue) {
 		this._info = info;
-		if (web3 instanceof Web3Z) {
-			this._web3 = web3;
-		} else {
+		if (web3 instanceof TransactionQueue) {
 			this._web3 = web3.host;
 			this._queue = web3;
+		} else {
+			this._web3 = web3;
 		}
 		somes.assert(this._info);
 		this._abis = {};
@@ -226,7 +226,7 @@ export default class HappyContract<T> {
 		}
 	}
 
-	static instance<T>(info: SolidityInfo, web3: Web3Z | TransactionQueue, name?: string): HappyContract<T> {
+	static instance<T>(info: SolidityInfo, web3: IWeb3Z | TransactionQueue, name?: string): HappyContract<T> {
 		var contractName = name || info.contractName;
 		if (!this._contracts[contractName])
 			this._contracts[contractName] = new HappyContract<T>(info, web3);
