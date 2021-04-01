@@ -4,7 +4,7 @@
  */
 
 import somes from 'somes';
-import {IWeb3Z, Web3Z, TransactionPromise, TransactionPromiseIMPL, FindEventResult, TransactionReceipt, EventData} from './index';
+import {IWeb3Z, TransactionPromise, TransactionPromiseIMPL, TransactionReceipt, EventData} from './index';
 import {TransactionQueue} from './queue';
 import {AbiItem, AbiOutput} from 'web3-utils/types';
 import { Contract, ContractSendMethod } from './index';
