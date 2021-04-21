@@ -378,6 +378,14 @@ export class Web3Z implements IWeb3Z {
 	 * @func signTx(param) 对交易进行签名
 	 */
 	async signTx(opts?: TxOptions): Promise<SerializedTx> {
+
+		if (opts) {
+			for (var [key,val] of Object.entries(opts)) {
+				if (val === undefined || val === null || val === '')
+					delete opts[key];
+			}
+		}
+
 		var _opts = Object.assign({
 			from: this.web3.defaultAccount,
 			// gas: this.gasLimit, // 该交易的执行时使用gas的上限
