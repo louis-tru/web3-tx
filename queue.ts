@@ -177,7 +177,7 @@ export class TransactionQueue {
 
 		for (var i = nonce, o: Nonce; (o = nonces[i]); i++) {
 			if (now > o.timeout) { // pending and is timeout
-				o.timeout = now + timeout;
+				o.timeout = timeout;
 				o.gasLimit++;
 				return o;
 			}
