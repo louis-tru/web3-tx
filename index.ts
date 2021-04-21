@@ -395,7 +395,7 @@ export class Web3Z implements IWeb3Z {
 			chainId: await this.eth.getChainId(),
 		}, opts);
 
-		console.log('signTx, TxOptions =', opts);
+		console.log('signTx, TxOptions =', _opts);
 
 		var tx = await crypto_tx.signTx(new TxSigner(this, _opts.from), _opts);
 
