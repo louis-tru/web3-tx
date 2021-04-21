@@ -129,7 +129,7 @@ class TxSigner {
 	private _host: IWeb3Z;
 	constructor(host: IWeb3Z, account: string) {
 		this._host = host;
-		this._account = account;
+		this._account = '0x' + crypto_tx.toChecksumAddress(buffer.from(account.slice(2), 'hex'));
 	}
 	async sign(message: IBuffer) {
 		if (!this._host.sign)
