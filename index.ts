@@ -47,17 +47,18 @@ export { Web3, ContractOptions, EventData, Transaction, TransactionReceipt, Bloc
 
 const crypto_tx = require('crypto-tx');
 
-const SAFE_TRANSACTION_MAX_TIMEOUT = 300 * 1e3;  // 300秒
-const TRANSACTION_MAX_BLOCK_RANGE = 32;
-const TRANSACTION_CHECK_TIME = 1e4; // 10秒
-const DEFAULT_GAS_LIMIT = 1e8;
-const DEFAULT_GAS_PRICE = 1e5;
+export const SAFE_TRANSACTION_MAX_TIMEOUT = 300 * 1e3;  // 300秒
+export const TRANSACTION_MAX_BLOCK_RANGE = 32;
+export const TRANSACTION_CHECK_TIME = 1e4; // 10秒
+export const DEFAULT_GAS_LIMIT = 1e8;
+export const DEFAULT_GAS_PRICE = 1e5;
 
 exports.Web3 = __Web3__;
 
 export interface FindEventResult {
 	event: EventData;
 	transaction: Transaction;
+	transactionReceipt: TransactionReceipt;
 }
 
 export interface SendTransactionOprions extends Dict {
@@ -83,7 +84,7 @@ export interface ContractSendMethod extends ContractSendMethodRaw {
 	 * returns serializedTx
 	 */
 	signTx(options?: TxOptions): Promise<SerializedTx>;
-	sendSignTransaction(options?: TxOptions): TransactionPromise;
+	sendSignTransaction(options?: TxOptions, callback?: (hash: string) => void): TransactionPromise;
 	send2(opts: TxOptions): TransactionPromise;
 }
 
@@ -116,7 +117,7 @@ export interface IWeb3Z {
 	setDefaultAccount(account: string): void;
 	createContract(address: string, abi: any[]): Contract;
 	sendTransaction(tx: TxOptions, opts?: STOptions): Promise<TransactionReceipt>;
-	sendSignTransaction(tx: TxOptions): Promise<TransactionReceipt>;
+	sendSignTransaction(tx: TxOptions, callback?: (hash: string) => void): Promise<TransactionReceipt>;
 	sendSignedTransaction(serializedTx: IBuffer, opts?: STOptions): Promise<TransactionReceipt>;
 	getBlockNumber(): Promise<number>;
 	getNonce(account?: string): Promise<number>;
@@ -269,10 +270,10 @@ export class Web3Z implements IWeb3Z {
 			return ib;
 		}
 
-		function sendSignTransaction(method: ContractSendMethod, opts?: TxOptions) {
+		function sendSignTransaction(method: ContractSendMethod, opts?: TxOptions, callback?: (hash: string) => void) {
 			return TransactionPromiseIMPL.proxy(async ()=>{
 				var tx = await signTx(method, opts);
-				var promise = self.sendSignedTransaction(tx.data, opts);
+				var promise = self.sendSignedTransaction(tx.data, opts, callback);
 				return {promise};
 			});
 		}
@@ -294,7 +295,7 @@ export class Web3Z implements IWeb3Z {
 			methods[name] = (...args: any[])=>{
 				var method = raw.call(methods, ...args) as ContractSendMethod;
 				method.signTx = e=>signTx(method, e),
-				method.sendSignTransaction = e=>sendSignTransaction(method, e);
+				method.sendSignTransaction = (e,cb)=>sendSignTransaction(method, e, cb);
 				method.send2 = e=>send2(method, e);
 				return method;
 			};
@@ -318,6 +319,7 @@ export class Web3Z implements IWeb3Z {
 
 		// read event data
 		var tx: Transaction | null = null;
+		var tx_r: TransactionReceipt | null = null;
 		var transactionIndex: number;
 		var event: EventData | undefined;
 		var events: EventData[];
@@ -330,6 +332,7 @@ export class Web3Z implements IWeb3Z {
 					var transactionIndex = transactions.indexOf(transactionHash);
 					if (transactionIndex != -1) {
 						if ( (tx = await this.eth.getTransactionFromBlock(blockNumber, transactionIndex)) )
+							tx_r = await this.eth.getTransactionReceipt(transactionHash);
 							break;
 					}
 				}
@@ -339,10 +342,11 @@ export class Web3Z implements IWeb3Z {
 			}
 		}
 
-		if (!tx)
+		if (!tx || !tx_r)
 			return null;
 
-		var transaction = tx
+		var transaction = tx;
+		var transactionReceipt = tx_r;
 		// var contract = await this.contract(transaction.to);
 
 		j = 10;
@@ -357,7 +361,7 @@ export class Web3Z implements IWeb3Z {
 				} else {
 					event = events.find(e=>e.blockHash==transaction.blockHash&&e.transactionIndex==transactionIndex);
 				}
-				return event ? { event: event as EventData, transaction }: null;
+				return event ? { event: event as EventData, transaction, transactionReceipt }: null;
 			} catch(err) {
 				if (j)
 					await utils.sleep(1e3);
@@ -529,10 +533,10 @@ export class Web3Z implements IWeb3Z {
 	/**
 	 * @func sendTransaction(tx) 签名交易数据并发送
 	 */
-	async sendSignTransaction(opts: TxOptions) {
+	async sendSignTransaction(opts: TxOptions, callback?: (hash: string) => void) {
 		return TransactionPromiseIMPL.proxy(async ()=>{
 			var tx = await this.signTx(opts);
-			var promise = this.sendSignedTransaction(tx.data, opts);
+			var promise = this.sendSignedTransaction(tx.data, opts, callback);
 			return {promise};
 		});
 	}
@@ -547,8 +551,10 @@ export class Web3Z implements IWeb3Z {
 	/**
 	 * @func sendSignedTransaction(serializedTx) 发送签名后的交易数据
 	 */
-	sendSignedTransaction(serializedTx: IBuffer, opts?: STOptions) {
-		return this._sendTransactionCheck(this.eth.sendSignedTransaction('0x' + serializedTx.toString('hex')), opts);
+	sendSignedTransaction(serializedTx: IBuffer, opts?: STOptions, callback?: (hash: string) => void) {
+		var cb = callback || function(){};
+		return this._sendTransactionCheck(
+			this.eth.sendSignedTransaction('0x' + serializedTx.toString('hex'), (e,h)=>!e&&h&&cb(h)), opts);
 	}
 
 	// Rewrite by method
