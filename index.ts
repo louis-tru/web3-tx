@@ -390,7 +390,7 @@ export class Web3Z implements IWeb3Z {
 			}
 		}
 
-		var _opts = Object.assign({
+		var { timeout, blockRange, ..._opts } = Object.assign({
 			from: this.web3.defaultAccount,
 			// gas: this.gasLimit, // 该交易的执行时使用gas的上限
 			gasLimit: this.gasLimit, // 该交易的执行时使用gas的上限

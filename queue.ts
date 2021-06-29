@@ -140,14 +140,13 @@ export class TransactionQueue {
 						if (nonce) {
 							resolve(await exec(nonce));
 						} else {
-							queue.list.push(ctx);
+							queue.list.unshift(ctx);
 							await utils.sleep(5e3); // sleep 5s
 						}
 					} catch(err) {
 						if (ctx.retry--) {
 							console.error(err);
 							queue.list.push(ctx); // retry back
-							return;
 						} else {
 							reject(err);
 						}
