@@ -86,6 +86,7 @@ export interface ContractSendMethod extends ContractSendMethodRaw {
 	signTx(options?: TxOptions): Promise<SerializedTx>;
 	sendSignTransaction(options?: TxOptions, callback?: (hash: string) => void): TransactionPromise;
 	send2(opts: TxOptions): TransactionPromise;
+
 }
 
 export interface ContractMethod {
@@ -294,9 +295,14 @@ export class Web3Z implements IWeb3Z {
 			var raw = methods[name];
 			methods[name] = (...args: any[])=>{
 				var method = raw.call(methods, ...args) as ContractSendMethod;
+				var call = method.call;
 				method.signTx = e=>signTx(method, e),
 				method.sendSignTransaction = (e,cb)=>sendSignTransaction(method, e, cb);
 				method.send2 = e=>send2(method, e);
+				method.call = function(opts?: any, ...args: any[]) {
+					var { timeout, blockRange, ..._opts } = opts || {};
+					return call.call(this, _opts, ...args);
+				};
 				return method;
 			};
 		});
