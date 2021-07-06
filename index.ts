@@ -442,7 +442,7 @@ export class Web3Z implements IWeb3Z {
 			var limit_block = blockNumber + block_range;
 			var completed = false
 			var is_check = false;
-			var transactionHash = '';
+			var txHash = '';
 			var rawReceipt: TransactionReceipt | undefined;
 
 			function complete(err?: Error, receipt?: TransactionReceipt) {
@@ -457,6 +457,7 @@ export class Web3Z implements IWeb3Z {
 								err = Error.new(errno.ERR_ETH_TRANSACTION_FAIL);
 							}
 						}
+						receipt = utils.clone(receipt); // fix clear rawReceipt props error
 					}
 					console.log('send signed Transaction complete', id, err, receipt);
 					err ? reject(Object.assign(Error.new(err), {receipt})): resolve(receipt as TransactionReceipt);
@@ -464,7 +465,7 @@ export class Web3Z implements IWeb3Z {
 			}
 
 			async function check_receipt() {
-				utils.assert(transactionHash, 'argument bad');
+				utils.assert(txHash, 'argument bad');
 				if (is_check)
 					return;
 				is_check = true;
@@ -472,7 +473,7 @@ export class Web3Z implements IWeb3Z {
 				while (!completed) {
 					var receipt;
 					try {
-						receipt = await eth.getTransactionReceipt(transactionHash);
+						receipt = await eth.getTransactionReceipt(txHash);
 					} catch(err) {
 						if (err.code != TIMEOUT_ERRNO) { // timeout
 							console.error(err);
@@ -501,22 +502,22 @@ export class Web3Z implements IWeb3Z {
 
 			peceipt
 			.on('transactionHash', (hash: string)=>{
-				transactionHash = hash;
+				txHash = hash;
 				var cb = pp.getHash();
 				if (cb)
 					cb(hash);
 			})
 			.then(e=>{
 				// console.log('_sendTransactionCheck . then', e);
-				transactionHash = e.transactionHash;
+				txHash = e.transactionHash;
 				rawReceipt = e;
 				check_receipt().catch(console.error);
 			})
 			.catch(async (e: Error)=>{
 				if (!completed) {
-					if (transactionHash) {
+					if (txHash) {
 						try {
-							var receipt = await eth.getTransactionReceipt(transactionHash);
+							var receipt = await eth.getTransactionReceipt(txHash);
 							if (receipt && receipt.blockHash) {
 								complete(e, receipt);
 							}
