@@ -38,6 +38,7 @@ import {Contract as ContractRaw, Options as ContractOptions,
 	EventData, CallOptions, SendOptions, ContractSendMethod as ContractSendMethodRaw } from 'web3-eth-contract';
 import {Transaction,TransactionReceipt,provider,PromiEvent } from 'web3-core';
 import {BlockTransactionString as Block} from 'web3-eth';
+import { Eth } from 'web3-eth';
 
 import './_fix_web3';
 
@@ -112,6 +113,7 @@ export interface SerializedTx {
 
 export interface IWeb3Z {
 	readonly web3: Web3;
+	readonly eth: Eth;
 	readonly gasLimit: number;
 	readonly gasPrice: number;
 	getDefaultAccount(): Promise<string>;
