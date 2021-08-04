@@ -211,18 +211,19 @@ export default class HappyContract<T> {
 		return this._contract.options.address;
 	}
 
-	async findEvent(event: string, blockNumber: number, transactionHash: string): Promise<EventData | null> {
+	async findEvent(event: string, blockNumber: number, transactionHash: string): Promise<EventData[] | null> {
 		var evt = await this._contract.findEvent(event, blockNumber, transactionHash);
-		return evt?.event || null;
+		return evt?.events || null;
 	}
 
-	async findEventFromReceipt(event: string, receipt: TransactionReceipt): Promise<EventData> {
+	async findEventFromReceipt(event: string, receipt: TransactionReceipt): Promise<EventData[]> {
 		if (receipt.events && receipt.events[event]) {
-			return receipt.events[event] as EventData;
+			var e = receipt.events[event];
+			return (Array.isArray(e) ? e: [e]) as EventData[];
 		} else {
 			var evt = await this.findEvent(event, receipt.blockNumber, receipt.transactionHash);
 			somes.assert(evt, `not event Sell ${event}`);
-			return evt as EventData;
+			return evt as EventData[];
 		}
 	}
 

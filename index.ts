@@ -57,7 +57,7 @@ export const DEFAULT_GAS_PRICE = 1e5;
 exports.Web3 = __Web3__;
 
 export interface FindEventResult {
-	event: EventData;
+	events: EventData[];
 	transaction: Transaction;
 	transactionReceipt: TransactionReceipt;
 }
@@ -329,7 +329,7 @@ export class Web3Z implements IWeb3Z {
 		var tx: Transaction | null = null;
 		var tx_r: TransactionReceipt | null = null;
 		var transactionIndex: number;
-		var event: EventData | undefined;
+		// var event: EventData | undefined;
 		var events: EventData[];
 
 		while (j--) { // 重试10次,10次后仍然不能从链上查询到txid,丢弃
@@ -365,11 +365,11 @@ export class Web3Z implements IWeb3Z {
 					fromBlock: blockNumber, toBlock: blockNumber,
 				});
 				if (events.some(e=>e.transactionHash)) { // have transactionHash
-					event = events.find(e=>e.transactionHash==transactionHash);
+					events = events.filter(e=>e.transactionHash==transactionHash);
 				} else {
-					event = events.find(e=>e.blockHash==transaction.blockHash&&e.transactionIndex==transactionIndex);
+					events = events.filter(e=>e.blockHash==transaction.blockHash&&e.transactionIndex==transactionIndex);
 				}
-				return event ? { event: event as EventData, transaction, transactionReceipt }: null;
+				return events.length ? { events, transaction, transactionReceipt }: null;
 			} catch(err) {
 				if (j)
 					await utils.sleep(1e3);
