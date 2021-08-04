@@ -32,7 +32,7 @@ import utils from 'somes';
 import buffer, {IBuffer} from 'somes/buffer';
 import errno from './errno';
 import './_fix_contract';
-import Web3 from 'web3';
+import __Web3 from 'web3';
 import * as net from 'net';
 import {Contract as ContractRaw, Options as ContractOptions, 
 	EventData, CallOptions, SendOptions, ContractSendMethod as ContractSendMethodRaw } from 'web3-eth-contract';
@@ -42,9 +42,9 @@ import { Eth } from 'web3-eth';
 
 import './_fix_web3';
 
-const __Web3__ = require('web3') as typeof Web3;
+export class Web3 extends (require('web3') as typeof __Web3) {};
 
-export { Web3, ContractOptions, EventData, Transaction, TransactionReceipt, Block, CallOptions, SendOptions };
+export { ContractOptions, EventData, Transaction, TransactionReceipt, Block, CallOptions, SendOptions };
 
 const crypto_tx = require('crypto-tx');
 
@@ -53,8 +53,6 @@ export const TRANSACTION_MAX_BLOCK_RANGE = 32;
 export const TRANSACTION_CHECK_TIME = 1e4; // 10秒
 export const DEFAULT_GAS_LIMIT = 1e8;
 export const DEFAULT_GAS_PRICE = 1e5;
-
-exports.Web3 = __Web3__;
 
 export interface FindEventResult {
 	events: EventData[];
@@ -193,7 +191,7 @@ export class Web3Z implements IWeb3Z {
 	get web3() {
 		if (!this._web3) {
 			var provider = this.getProvider();
-			var { HttpProvider, WebsocketProvider, IpcProvider } = __Web3__.providers;
+			var { HttpProvider, WebsocketProvider, IpcProvider } = Web3.providers;
 			if (typeof provider == 'string') {
 				if (/^https?:/.test(provider)) { // http
 					provider = new HttpProvider(provider, { timeout: SAFE_TRANSACTION_MAX_TIMEOUT });
@@ -205,7 +203,7 @@ export class Web3Z implements IWeb3Z {
 					throw Error(`Can't create 'Web3 provider`);
 				}
 			}
-			this._web3 = new __Web3__(provider);
+			this._web3 = new Web3(provider);
 		}
 		return this._web3 as Web3;
 	}
