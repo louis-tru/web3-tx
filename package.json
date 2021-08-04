@@ -12,9 +12,9 @@
 		"@types/node": "~12.12.20"
 	},
 	"dependencies": {
-		"somes": "~0.10.116",
+		"somes": "~0.10.120",
 		"web3": "~1.2.8",
 		"bignumber.js": "~9.0.0",
-		"crypto-tx": "~0.4.0"
+		"crypto-tx": "~0.4.4"
 	}
 }
