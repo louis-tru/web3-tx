@@ -26,7 +26,7 @@ export interface Opts {
 	gasLimit?: number;
 }
 
-export interface Result<T> {
+export interface Result<T = void> {
 	post(opts?: Opts): TransactionPromise;
 	call(opts?: Opts): Promise<T>;
 	estimateGas(opts?: Opts): Promise<number>;
