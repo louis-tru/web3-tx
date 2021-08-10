@@ -167,6 +167,7 @@ export default class HappyContract<T> {
 		var {_queue,_web3} = this;
 
 		return TransactionPromiseIMPL.proxy(async ()=>{
+			// await method.call(opts as any); // TODO ...
 			opts = opts || {};
 			opts.from = opts.from || await _web3.getDefaultAccount();
 			var receipt: any;
