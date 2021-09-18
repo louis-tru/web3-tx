@@ -300,7 +300,7 @@ export class Web3Z implements IWeb3Z {
 				method.sendSignTransaction = (e,cb)=>sendSignTransaction(method, e, cb);
 				method.send2 = e=>send2(method, e);
 				method.call = function(opts?: any, ...args: any[]) {
-					var { retry, timeout, blockRange, ..._opts } = opts || {};
+					var { event, retry, timeout, blockRange, ..._opts } = opts || {};
 					return call.call(this, _opts, ...args);
 				};
 				return method;
@@ -327,7 +327,6 @@ export class Web3Z implements IWeb3Z {
 		var tx: Transaction | null = null;
 		var tx_r: TransactionReceipt | null = null;
 		var transactionIndex: number;
-		// var event: EventData | undefined;
 		var events: EventData[];
 
 		while (j--) { // 重试10次,10次后仍然不能从链上查询到txid,丢弃
@@ -396,7 +395,7 @@ export class Web3Z implements IWeb3Z {
 			}
 		}
 
-		var { retry, timeout, blockRange, ..._opts } = Object.assign({
+		var { event, retry, timeout, blockRange, ..._opts } = Object.assign({
 			from: this.web3.defaultAccount,
 			// gas: this.gasLimit, // 该交易的执行时使用gas的上限
 			gasLimit: this.gasLimit, // 该交易的执行时使用gas的上限
