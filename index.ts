@@ -184,26 +184,41 @@ export class Web3Z implements IWeb3Z {
 
 	TRANSACTION_CHECK_TIME = TRANSACTION_CHECK_TIME;
 
+	private getProviderFrom(provider: provider) {
+		var { HttpProvider, WebsocketProvider, IpcProvider } = Web3.providers;
+		if (typeof provider == 'string') {
+			if (/^https?:/.test(provider)) { // http
+				provider = new HttpProvider(provider, { timeout: SAFE_TRANSACTION_MAX_TIMEOUT });
+			} else if (/^wss?:/.test(provider)) { // web socket
+				provider = new WebsocketProvider(provider, { timeout: SAFE_TRANSACTION_MAX_TIMEOUT });
+			} else if (/^[\\/]/.test(provider)) { // ipc
+				provider = new IpcProvider(provider, net);
+			} else {
+				throw Error(`Can't create 'Web3 provider`);
+			}
+		}
+		return provider;
+	}
+
+	get currentProvider() {
+		return this.web3.currentProvider;
+	}
+
 	getProvider(): provider {
 		return 'http://127.0.0.1:8545';
 	}
 
+	setProvider(provider: provider) {
+		if (!this._web3) {
+			this._web3 = new Web3(this.getProviderFrom(provider));
+		} else {
+			this._web3.setProvider(this.getProviderFrom(provider));
+		}
+	}
+
 	get web3() {
 		if (!this._web3) {
-			var provider = this.getProvider();
-			var { HttpProvider, WebsocketProvider, IpcProvider } = Web3.providers;
-			if (typeof provider == 'string') {
-				if (/^https?:/.test(provider)) { // http
-					provider = new HttpProvider(provider, { timeout: SAFE_TRANSACTION_MAX_TIMEOUT });
-				} else if (/^wss?:/.test(provider)) { // web socket
-					provider = new WebsocketProvider(provider, { timeout: SAFE_TRANSACTION_MAX_TIMEOUT });
-				} else if (/^[\\/]/.test(provider)) { // ipc
-					provider = new IpcProvider(provider, net);
-				} else {
-					throw Error(`Can't create 'Web3 provider`);
-				}
-			}
-			this._web3 = new Web3(provider);
+			this._web3 = new Web3(this.getProviderFrom(this.getProvider()));
 		}
 		return this._web3 as Web3;
 	}
@@ -231,10 +246,6 @@ export class Web3Z implements IWeb3Z {
 
 	set gasPrice(value) {
 		this._gasPrice = Number(value) || DEFAULT_GAS_PRICE;
-	}
-
-	get currentProvider() {
-		return this.web3.currentProvider;
 	}
 
 	get eth() {
