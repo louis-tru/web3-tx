@@ -474,7 +474,7 @@ export class Web3Z implements IWeb3Z {
 					var receipt;
 					try {
 						receipt = await eth.getTransactionReceipt(txHash);
-					} catch(err) {
+					} catch(err: any) {
 						if (err.code != TIMEOUT_ERRNO) { // timeout
 							console.error(err);
 						} else {
