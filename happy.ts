@@ -114,7 +114,7 @@ export default class HappyContract<T> {
 			var out = outputs[i];
 			var type = out.type;
 
-			if (type.substr(type.length - 2) == '[]') {
+			if (type.substring(type.length - 2) == '[]') {
 				item = (item as any[]).map(e=>this._parseItemOutputs(type.substr(0, type.length - 2), out, e));
 			} else {
 				item = this._parseItemOutputs(type, out, item);
@@ -131,7 +131,7 @@ export default class HappyContract<T> {
 		var abi = this._abis[prop];
 
 		opts = opts || {};
-		opts.from = opts.from || await _web3.getDefaultAccount();
+		opts.from = opts.from || await _web3.defaultAccount();
 
 		// call
 		var rawOutputs = await method.call(opts as any);
@@ -169,7 +169,7 @@ export default class HappyContract<T> {
 		return TransactionPromiseIMPL.proxy(async ()=>{
 			// await method.call(opts as any); // TODO ...
 			opts = opts || {};
-			opts.from = opts.from || await _web3.getDefaultAccount();
+			opts.from = opts.from || await _web3.defaultAccount();
 			var receipt: any;
 			// post
 			if (_web3.sign) {
@@ -180,9 +180,9 @@ export default class HappyContract<T> {
 				}
 			} else {
 				if (_queue) {
-					receipt = _queue.push(e=>method.send2({...opts, ...e}), opts);
+					receipt = _queue.push(e=>method.post({...opts, ...e}), opts);
 				} else {
-					receipt = method.send2(opts);
+					receipt = method.post(opts);
 				}
 			}
 			return {promise: receipt};

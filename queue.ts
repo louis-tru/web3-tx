@@ -116,10 +116,10 @@ export class TransactionQueue {
 	/**
 	 * @func push(exec, options) 排队交易
 	 */
-	push<R>(exec: (arg: DeOptions)=>Promise<R>, opts?: Options): Promise<R> {
+	async push<R>(exec: (arg: DeOptions)=>Promise<R>, opts?: Options): Promise<R> {
 
 		var options = {from: '', retry: 0, timeout: TRANSACTION_NONCE_TIMEOUT, ...opts};
-		var from = options.from = options.from || this._host.web3.defaultAccount || '';
+		var from = options.from = options.from || await this._host.defaultAccount();
 		var retry = options.retry = Number(options.retry) || 0;
 		var timeout = options.timeout = Number(options.timeout) || 0;
 		var queue = this._tx_queues[from];
@@ -127,7 +127,7 @@ export class TransactionQueue {
 			this._tx_queues[from] = queue = { list: new List(), running: false };
 		}
 
-		return new Promise((resolve, reject)=>{
+		return await new Promise((resolve, reject)=>{
 			var ctx = {
 				retry,
 				options,
@@ -165,7 +165,7 @@ export class TransactionQueue {
 	}
 
 	private async getNonce_(account?: string, _timeout?: number, greedy?: boolean): Promise<Nonce | null> {
-		var from = account || await this._host.getDefaultAccount();
+		var from = account || await this._host.defaultAccount();
 		utils.assert(from, 'getNonce error account empty');
 
 		var now = Date.now();

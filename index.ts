@@ -46,6 +46,8 @@ export class Web3 extends (require('web3') as typeof __Web3) {};
 
 export { ContractOptions, EventData, Transaction, TransactionReceipt, Block, CallOptions, SendOptions };
 
+export const providers = Web3.providers;
+
 const crypto_tx = require('crypto-tx');
 
 export const SAFE_TRANSACTION_MAX_TIMEOUT = 300 * 1e3;  // 300秒
@@ -84,7 +86,7 @@ export interface ContractSendMethod extends ContractSendMethodRaw {
 	 */
 	signTx(options?: TxOptions): Promise<SerializedTx>;
 	sendSignTransaction(options?: TxOptions, callback?: (hash: string) => void): TransactionPromise;
-	send2(opts: TxOptions): TransactionPromise;
+	post(opts: TxOptions): TransactionPromise;
 
 }
 
@@ -114,8 +116,7 @@ export interface IWeb3Z {
 	readonly eth: Eth;
 	readonly gasLimit: number;
 	readonly gasPrice: number;
-	getDefaultAccount(): Promise<string>;
-	setDefaultAccount(account: string): void;
+	defaultAccount(): Promise<string>;
 	createContract(address: string, abi: any[]): Contract;
 	sendTransaction(tx: TxOptions, opts?: STOptions): Promise<TransactionReceipt>;
 	sendSignTransaction(tx: TxOptions, callback?: (hash: string) => void): Promise<TransactionReceipt>;
@@ -200,15 +201,15 @@ export class Web3Z implements IWeb3Z {
 		return provider;
 	}
 
-	get currentProvider() {
-		return this.web3.currentProvider;
-	}
-
-	getProvider(): provider {
+	givenProvider(): provider {
 		return 'http://127.0.0.1:8545';
 	}
 
-	setProvider(provider: provider) {
+	get provider() {
+		return this.web3.currentProvider;
+	}
+
+	set provider(provider: provider) {
 		if (!this._web3) {
 			this._web3 = new Web3(this.getProviderFrom(provider));
 		} else {
@@ -218,17 +219,12 @@ export class Web3Z implements IWeb3Z {
 
 	get web3() {
 		if (!this._web3) {
-			this._web3 = new Web3(this.getProviderFrom(this.getProvider()));
+			this._web3 = new Web3(this.getProviderFrom(this.givenProvider()));
 		}
 		return this._web3 as Web3;
 	}
 
-	setDefaultAccount(account: string) {
-		this.web3.defaultAccount = account;
-		this.web3.eth.defaultAccount = account;
-	}
-
-	async getDefaultAccount() {
+	async defaultAccount() {
 		return this.web3.defaultAccount || (await this.eth.getAccounts())[0] || '';
 	}
 
@@ -290,9 +286,9 @@ export class Web3Z implements IWeb3Z {
 			});
 		}
 
-		function send2(method: ContractSendMethod, opts?: TxOptions) {
+		function post(method: ContractSendMethod, opts?: TxOptions) {
 			return TransactionPromiseIMPL.proxy(async ()=>{
-				var from = opts?.from || await self.getDefaultAccount();
+				var from = opts?.from || await self.defaultAccount();
 				var opts_ = Object.assign(opts, {from}) as SendOptions;
 				var promise1 = method.send(opts_) as unknown as PromiEvent<TransactionReceipt>
 				var promise = self._sendTransactionCheck(promise1, opts_);
@@ -309,7 +305,7 @@ export class Web3Z implements IWeb3Z {
 				var call = method.call;
 				method.signTx = e=>signTx(method, e),
 				method.sendSignTransaction = (e,cb)=>sendSignTransaction(method, e, cb);
-				method.send2 = e=>send2(method, e);
+				method.post = e=>post(method, e);
 				method.call = function(opts?: any, ...args: any[]) {
 					var { event, retry, timeout, blockRange, ..._opts } = opts || {};
 					return call.call(this, _opts, ...args);
@@ -581,6 +577,6 @@ export class Web3Z implements IWeb3Z {
 	}
 
 	async getNonce(account?: string): Promise<number> {
-		return await this.eth.getTransactionCount(account || await this.getDefaultAccount(), 'latest');
+		return await this.eth.getTransactionCount(account || await this.defaultAccount(), 'latest');
 	}
 }
