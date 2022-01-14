@@ -53,8 +53,7 @@ const crypto_tx = require('crypto-tx');
 export const SAFE_TRANSACTION_MAX_TIMEOUT = 300 * 1e3;  // 300秒
 export const TRANSACTION_MAX_BLOCK_RANGE = 32;
 export const TRANSACTION_CHECK_TIME = 1e4; // 10秒
-export const DEFAULT_GAS_LIMIT = 1e8;
-export const DEFAULT_GAS_PRICE = 1e5;
+export const DEFAULT_GAS_PRICE = 1e5; // default gas price
 
 export interface FindEventResult {
 	events: EventData[];
@@ -77,7 +76,7 @@ export interface TxOptions extends STOptions {
 	gas?: number;
 	gasLimit?: number;
 	gasPrice?: number;
-	value?: string;
+	value?: number| string;
 	data?: string;
 }
 
@@ -112,16 +111,17 @@ export interface SerializedTx {
 	hash: IBuffer;
 }
 
+export type SendCallback = (hash: string) => void;
+
 export interface IWeb3Z {
 	readonly web3: Web3;
 	readonly eth: Eth;
-	readonly gasLimit: number;
 	readonly gasPrice: number;
 	defaultAccount(): Promise<string>;
 	createContract(address: string, abi: any[]): Contract;
-	sendTransaction(tx: TxOptions, opts?: STOptions): Promise<TransactionReceipt>;
-	sendSignTransaction(tx: TxOptions, callback?: (hash: string) => void): Promise<TransactionReceipt>;
-	sendSignedTransaction(serializedTx: IBuffer, opts?: STOptions): Promise<TransactionReceipt>;
+	sendTransaction(tx: TxOptions): TransactionPromise;
+	sendSignTransaction(tx: TxOptions, callback?: SendCallback): TransactionPromise;
+	sendSignedTransaction(serializedTx: IBuffer, opts?: STOptions): TransactionPromise;
 	getBlockNumber(): Promise<number>;
 	getNonce(account?: string): Promise<number>;
 	sign?(message: IBuffer, account?: string): Promise<Signature> | Signature;
@@ -153,19 +153,19 @@ export interface TransactionPromise extends Promise<TransactionReceipt> {
 	// receipt
 	// confirmation
 	// error
-	hash(cb: (hash: string)=>void): this;
+	hash(cb: SendCallback): this;
 }
 
 export class TransactionPromiseIMPL extends utils.PromiseNx<TransactionReceipt> implements TransactionPromise {
-	private _hash?: (hash: string)=>void;
-	hash(cb: (hash: string)=>void) {
+	private _hash?: SendCallback;
+	hash(cb: SendCallback) {
 		this._hash = cb;
 		return this;
 	}
 	getHash() {
 		return this._hash;
 	}
-	static proxy(exec: ()=>Promise<{promise:TransactionPromise}>) {
+	static proxy(exec: ()=>Promise<{promise:TransactionPromise}>): TransactionPromise {
 		return new TransactionPromiseIMPL(async (r, j, p)=>{
 			var p_ = p as TransactionPromiseIMPL;
 			var e = await exec();
@@ -180,7 +180,6 @@ export class TransactionPromiseIMPL extends utils.PromiseNx<TransactionReceipt> 
 }
 
 export class Web3Z implements IWeb3Z {
-	private _gasLimit = DEFAULT_GAS_LIMIT;
 	private _gasPrice = DEFAULT_GAS_PRICE;
 	private _web3?: Web3;
 
@@ -229,14 +228,6 @@ export class Web3Z implements IWeb3Z {
 		return this.web3.defaultAccount || (await this.eth.getAccounts())[0] || '';
 	}
 
-	get gasLimit() {
-		return this._gasLimit;
-	}
-
-	set gasLimit(value) {
-		this._gasLimit = Number(value) || DEFAULT_GAS_LIMIT;
-	}
-
 	get gasPrice() {
 		return this._gasPrice;
 	}
@@ -259,38 +250,15 @@ export class Web3Z implements IWeb3Z {
 
 	createContract(contractAddress: string, abi: any[]) {
 		var self = this;
-		var account = self.web3.defaultAccount || '';
-		var contract = new self.eth.Contract(abi, contractAddress, {
-			from: account,
-			// TODO pos相夫本节点配置了这个"gas"参数所有协约get rpc请求均不能访问
-			/*gasLimit: self.gasLimit,*/
-		}) as Contract;
+		var contract = new self.eth.Contract(abi, contractAddress) as Contract;
 
-		// setProvider
-
-		contract.findEvent = (event: string, blockNumber: number, hash: string)=>this._findEvent(contract, event, blockNumber, hash);
-
-		async function setGas(method: ContractSendMethod, opts: TxOptions) {debugger
-			if (!opts.gas) {
-				//opts.gas = DEFAULT_GAS_LIMIT;
-				opts.gas = await method.estimateGas();
-			}
-			if (!opts.gasLimit) {
-				opts.gasLimit = parseInt(String(opts.gas * 1.2)); // suggested gas limit
-			}
-		}
+		contract.findEvent = (event: string, blockNumber: number, hash: string)=>this._FindEvent(contract, event, blockNumber, hash);
 
 		async function signTx(method: ContractSendMethod, opts?: TxOptions) {
-			var _opts = Object.assign({
-				from: account,
-				value: '0x0',
-			}, opts, {
+			var _opts = Object.assign(opts, {
 				to: contractAddress,
 				data: method.encodeABI(),
 			});
-
-			await setGas(method, _opts);
-
 			var ib = await self.signTx(_opts);
 			return ib;
 		}
@@ -303,13 +271,12 @@ export class Web3Z implements IWeb3Z {
 			});
 		}
 
-		function sendTransaction(method: ContractSendMethod, opts?: TxOptions) {
+		function sendTransaction(method: ContractSendMethod, _opts?: TxOptions) {
 			return TransactionPromiseIMPL.proxy(async ()=>{
-				var from = opts?.from || await self.defaultAccount();
-				var opts_ = Object.assign(opts, {from}) as SendOptions;
-				await setGas(method, opts_ as TxOptions);
-				var promise1 = method.send(opts_) as unknown as PromiEvent<TransactionReceipt>
-				var promise = self._sendTransactionCheck(promise1, opts_);
+				var opts = _opts || {};
+				await self.setTx(opts, (tx)=>method.estimateGas(tx));
+				var promise1 = method.send(opts as SendOptions) as unknown as PromiEvent<TransactionReceipt>
+				var promise = self._sendTransactionCheck(promise1, opts);
 				return {promise};
 			});
 		}
@@ -335,7 +302,7 @@ export class Web3Z implements IWeb3Z {
 		return contract as Contract;
 	}
 
-	private async _findEvent(contract: Contract, eventName: string, blockNumber: number, transactionHash: string): Promise<FindEventResult | null> {
+	private async _FindEvent(contract: Contract, eventName: string, blockNumber: number, transactionHash: string): Promise<FindEventResult | null> {
 		var j = 10;
 
 		while (j--) { // 确保本块已同步
@@ -403,6 +370,25 @@ export class Web3Z implements IWeb3Z {
 		return null;
 	}
 
+	private async setTx(tx: TxOptions, estimateGas?: (tx: TxOptions)=>Promise<number>) {
+		estimateGas = estimateGas || ((tx: TxOptions)=>this.eth.estimateGas(tx));
+		tx.from = tx.from || await this.defaultAccount();
+		tx.nonce = tx.nonce || await this.eth.getTransactionCount(tx.from);
+		tx.chainId = tx.chainId || await this.eth.getChainId();
+		tx.value = tx.value || '0x0';
+		tx.data = tx.data || '0x';
+
+		if (!tx.gas)
+			tx.gas = await estimateGas({...tx,
+				chainId: '0x' + tx.chainId.toString(16),
+				nonce: '0x' + tx.nonce.toString(16),
+			} as any);
+		if (!tx.gasLimit) // 程序运行时步数限制 default
+			tx.gasLimit = parseInt(String(tx.gas * 1.2)); // suggested gas limit
+		if (!tx.gasPrice) // 程序运行单步的wei数量wei default
+			tx.gasPrice = Number(await this.eth.getGasPrice()) || this.gasPrice;
+	}
+
 	/**
 	 * @func sign message long bytes32
 	 */
@@ -412,25 +398,19 @@ export class Web3Z implements IWeb3Z {
 	 * @func signTx(param) 对交易进行签名
 	 */
 	async signTx(opts?: TxOptions): Promise<SerializedTx> {
-
 		if (opts) {
 			for (var [key,val] of Object.entries(opts)) {
 				if (val === undefined || val === null || val === '')
 					delete opts[key];
 			}
 		}
+		var { event, retry, timeout, blockRange, ..._opts } = Object.assign({}, opts);
 
-		var { event, retry, timeout, blockRange, ..._opts } = Object.assign({
-			from: this.web3.defaultAccount,
-			gasLimit: this.gasLimit, // 程序运行时步数限制 default
-			gasPrice: this.gasPrice, // 程序运行单步的wei数量wei default
-			value: '0x0',
-			chainId: await this.eth.getChainId(),
-		}, opts);
+		await this.setTx(_opts);
 
 		console.log('signTx, TxOptions =', _opts);
 
-		var tx = await crypto_tx.signTx(new TxSigner(this, _opts.from), _opts);
+		var tx = await crypto_tx.signTx(new TxSigner(this, _opts.from as string), _opts);
 
 		return {
 			data: buffer.from(tx.serializedTx),
@@ -561,21 +541,26 @@ export class Web3Z implements IWeb3Z {
 	}
 
 	/**
-	 * @func sendTransaction(tx) 签名交易数据并发送
+	 * @func sendTransaction(tx) 发送交易数据(不签名)
 	 */
-	async sendSignTransaction(opts: TxOptions, callback?: (hash: string) => void) {
-		return TransactionPromiseIMPL.proxy(async ()=>{
-			var tx = await this.signTx(opts);
-			var promise = this.sendSignedTransaction(tx.data, opts, callback);
+	sendTransaction(tx: TxOptions, callback?: (hash: string) => void) {
+		var cb = callback || function(){};
+		return TransactionPromiseIMPL.proxy(async()=>{
+			await this.setTx(tx);
+			var promise = this._sendTransactionCheck(this.eth.sendTransaction(tx, (e,h)=>!e&&h&&cb(h)), tx);
 			return {promise};
 		});
 	}
 
 	/**
-	 * @func sendTransaction(tx) 发送交易数据(不签名)
+	 * @func sendTransaction(tx) 签名交易数据并发送
 	 */
-	sendTransaction(tx: TxOptions, opts?: STOptions) {
-		return this._sendTransactionCheck(this.eth.sendTransaction(tx), opts);
+	 sendSignTransaction(opts: TxOptions, callback?: (hash: string) => void) {
+		return TransactionPromiseIMPL.proxy(async ()=>{
+			var tx = await this.signTx(opts);
+			var promise = this.sendSignedTransaction(tx.data, opts, callback);
+			return {promise};
+		});
 	}
 
 	/**

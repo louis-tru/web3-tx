@@ -39,7 +39,7 @@ const TRANSACTION_NONCE_TIMEOUT_MAX = 300 * 1e3;  // 300秒
 export interface DeOptions {
 	from: string;
 	nonce: number;
-	gasLimit: number;
+	gasPrice: number;
 }
 
 export interface Nonce extends DeOptions {
@@ -172,18 +172,18 @@ export class TransactionQueue {
 		var nonces = (this._tx_nonceObjs[from] || (this._tx_nonceObjs[from] = {}));
 		var nonce = await this._host.getNonce(account);
 		var timeout = Math.min(TRANSACTION_NONCE_TIMEOUT_MAX, _timeout || TRANSACTION_NONCE_TIMEOUT) + now;
-		var gasLimit = this._host.gasLimit;
+		var gasPrice = this._host.gasPrice;
 
 		for (var i = nonce, o: Nonce; (o = nonces[i]); i++) {
 			if (now > o.timeout) { // pending and is timeout
 				o.timeout = timeout;
-				o.gasLimit++;
+				o.gasPrice+=10;
 				return o;
 			}
 		}
 
 		if (greedy || nonce == i) {
-			return o = nonces[i] = { from, nonce: i, timeout, gasLimit };
+			return o = nonces[i] = { from, nonce: i, timeout, gasPrice };
 		}
 
 		return null;
