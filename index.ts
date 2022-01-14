@@ -74,6 +74,7 @@ export interface TxOptions extends STOptions {
 	from?: string;
 	nonce?: number;
 	to?: string;
+	gas?: number;
 	gasLimit?: number;
 	gasPrice?: number;
 	value?: string;
@@ -269,17 +270,26 @@ export class Web3Z implements IWeb3Z {
 
 		contract.findEvent = (event: string, blockNumber: number, hash: string)=>this._findEvent(contract, event, blockNumber, hash);
 
+		async function setGas(method: ContractSendMethod, opts: TxOptions) {debugger
+			if (!opts.gas) {
+				//opts.gas = DEFAULT_GAS_LIMIT;
+				opts.gas = await method.estimateGas();
+			}
+			if (!opts.gasLimit) {
+				opts.gasLimit = parseInt(String(opts.gas * 1.2)); // suggested gas limit
+			}
+		}
+
 		async function signTx(method: ContractSendMethod, opts?: TxOptions) {
 			var _opts = Object.assign({
 				from: account,
 				value: '0x0',
-			}, opts);
-
-			Object.assign(_opts, {
+			}, opts, {
 				to: contractAddress,
 				data: method.encodeABI(),
-				gasLimit: _opts.gasLimit || await method.estimateGas(),
-			}) 
+			});
+
+			await setGas(method, _opts);
 
 			var ib = await self.signTx(_opts);
 			return ib;
@@ -293,10 +303,11 @@ export class Web3Z implements IWeb3Z {
 			});
 		}
 
-		function post(method: ContractSendMethod, opts?: TxOptions) {
+		function sendTransaction(method: ContractSendMethod, opts?: TxOptions) {
 			return TransactionPromiseIMPL.proxy(async ()=>{
 				var from = opts?.from || await self.defaultAccount();
 				var opts_ = Object.assign(opts, {from}) as SendOptions;
+				await setGas(method, opts_ as TxOptions);
 				var promise1 = method.send(opts_) as unknown as PromiEvent<TransactionReceipt>
 				var promise = self._sendTransactionCheck(promise1, opts_);
 				return {promise};
@@ -312,7 +323,7 @@ export class Web3Z implements IWeb3Z {
 				var call = method.call;
 				method.signTx = e=>signTx(method, e),
 				method.sendSignTransaction = (e,cb)=>sendSignTransaction(method, e, cb);
-				method.post = e=>post(method, e);
+				method.post = e=>sendTransaction(method, e);
 				method.call = function(opts?: any, ...args: any[]) {
 					var { event, retry, timeout, blockRange, ..._opts } = opts || {};
 					return call.call(this, _opts, ...args);
@@ -411,8 +422,8 @@ export class Web3Z implements IWeb3Z {
 
 		var { event, retry, timeout, blockRange, ..._opts } = Object.assign({
 			from: this.web3.defaultAccount,
-			gasLimit: this.gasLimit, // 程序运行时步数限制
-			gasPrice: this.gasPrice, // 程序运行单步的wei数量wei
+			gasLimit: this.gasLimit, // 程序运行时步数限制 default
+			gasPrice: this.gasPrice, // 程序运行单步的wei数量wei default
 			value: '0x0',
 			chainId: await this.eth.getChainId(),
 		}, opts);
