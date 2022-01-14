@@ -262,7 +262,7 @@ export class Web3Z implements IWeb3Z {
 		var contract = new self.eth.Contract(abi, contractAddress, {
 			from: account,
 			// TODO pos相夫本节点配置了这个"gas"参数所有协约get rpc请求均不能访问
-			/*gas: self.gasLimit, gasLimit: self.gasLimit,*/
+			/*gasLimit: self.gasLimit,*/
 		}) as Contract;
 
 		// setProvider
@@ -270,10 +270,17 @@ export class Web3Z implements IWeb3Z {
 		contract.findEvent = (event: string, blockNumber: number, hash: string)=>this._findEvent(contract, event, blockNumber, hash);
 
 		async function signTx(method: ContractSendMethod, opts?: TxOptions) {
-			var _opts = Object.assign({ from: account, value: '0x00' }, opts, {
+			var _opts = Object.assign({
+				from: account,
+				value: '0x0',
+			}, opts);
+
+			Object.assign(_opts, {
 				to: contractAddress,
 				data: method.encodeABI(),
-			});
+				gasLimit: _opts.gasLimit || await method.estimateGas(),
+			}) 
+
 			var ib = await self.signTx(_opts);
 			return ib;
 		}
@@ -404,10 +411,9 @@ export class Web3Z implements IWeb3Z {
 
 		var { event, retry, timeout, blockRange, ..._opts } = Object.assign({
 			from: this.web3.defaultAccount,
-			// gas: this.gasLimit, // 该交易的执行时使用gas的上限
-			gasLimit: this.gasLimit, // 该交易的执行时使用gas的上限
-			gasPrice: this.gasPrice, // gasprice就是起到一个汇率的作用
-			value: '0x00',
+			gasLimit: this.gasLimit, // 程序运行时步数限制
+			gasPrice: this.gasPrice, // 程序运行单步的wei数量wei
+			value: '0x0',
 			chainId: await this.eth.getChainId(),
 		}, opts);
 
