@@ -9,7 +9,7 @@
 		"build": "tsc && cp LICENSE *.md *.json out/web3z"
 	},
 	"devDependencies": {
-		"@types/node": "~12.12.20"
+		"@types/node": "~16.11.7"
 	},
 	"dependencies": {
 		"somes": "~0.11.0",
