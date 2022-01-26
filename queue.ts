@@ -104,7 +104,7 @@ export class TransactionQueue {
 				queue.list.shift();
 				await ctx.dequeue(nonce);
 			} catch (err) {
-				console.error(err);
+				console.warn(err);
 				await utils.sleep(1e3); // sleep 1s
 			}
 			this._dequeue(queue);
@@ -145,7 +145,7 @@ export class TransactionQueue {
 						}
 					} catch(err) {
 						if (ctx.retry--) {
-							console.error(err);
+							console.warn(err);
 							queue.list.push(ctx); // retry back
 						} else {
 							reject(err);

@@ -479,7 +479,7 @@ export class Web3Z implements IWeb3Z {
 						receipt = await eth.getTransactionReceipt(txHash);
 					} catch(err: any) {
 						if (err.code != TIMEOUT_ERRNO) { // timeout
-							console.error(err);
+							console.warn(err);
 						} else {
 							console.warn(err);
 						}
@@ -493,7 +493,7 @@ export class Web3Z implements IWeb3Z {
 						try {
 							blockNumber = await self.getBlockNumber();
 						} catch(err) {
-							console.error(err);
+							console.warn(err);
 						}
 						if (blockNumber && blockNumber > limit_block) {
 							complete(Error.new(errno.ERR_ETH_TRANSACTION_FAIL));
