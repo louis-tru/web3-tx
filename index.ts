@@ -486,6 +486,7 @@ export class Web3Z implements IWeb3Z {
 	set provider(provider: provider) {
 		if (!this._web3) {
 			this._web3 = new Web3(this.getProviderFrom(provider));
+			(this._web3.eth as any).Contract = null;
 		} else {
 			this._web3.setProvider(this.getProviderFrom(provider));
 		}
@@ -494,6 +495,7 @@ export class Web3Z implements IWeb3Z {
 	get web3() {
 		if (!this._web3) {
 			this._web3 = new Web3(this.getProviderFrom(this.givenProvider()));
+			(this._web3.eth as any).Contract = null;
 		}
 		return this._web3 as Web3;
 	}
@@ -522,7 +524,7 @@ export class Web3Z implements IWeb3Z {
 		return this.web3.version;
 	}
 
-	createContract(contractAddress: string, abi: any[]) {
+	createContract(contractAddress: string, abi: AbiItem[]) {
 		return new Contract(this, abi, contractAddress);
 	}
 
