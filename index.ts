@@ -39,6 +39,7 @@ import {Contract as ContractRaw, Options as ContractOptions,
 import {Transaction,TransactionReceipt,provider,PromiEvent } from 'web3-core';
 import {BlockTransactionString as Block} from 'web3-eth';
 import { Eth } from 'web3-eth';
+import {AbiItem} from 'web3-utils';
 
 import './_fix_web3';
 
@@ -146,6 +147,90 @@ class TxSigner {
 	}
 }
 
+export class Contract extends ContractRaw {
+	private _host: Web3Z;
+
+	constructor(host: Web3Z, jsonInterface: AbiItem[], address?: string, options?: ContractOptions) {
+		super(jsonInterface, address, options);
+		this._host = host;
+		this.setHost(host);
+	}
+
+	setHost(host: Web3Z) {
+		this._host = host;
+		(this as any).setProvider(host.eth);
+	}
+
+	async findEvent(event: string, blockNumber: number, transactionHash: string) {
+		var j = 10;
+
+		while (j--) { // 确保本块已同步
+			var num = await this._host.eth.getBlockNumber();
+			if (num >= blockNumber) {
+				break;
+			}
+			await utils.sleep(1e4); // 10s
+		}
+
+		j = 10;
+
+		// read event data
+		var tx: Transaction | null = null;
+		var tx_r: TransactionReceipt | null = null;
+		var transactionIndex: number;
+		var events: EventData[];
+
+		while (j--) { // 重试10次,10次后仍然不能从链上查询到txid,丢弃
+			try {
+				var block = await this._host.eth.getBlock(blockNumber);// as Transaction[];
+				if (block) {
+					var transactions = block.transactions as string[];
+					var transactionIndex = transactions.indexOf(transactionHash);
+					if (transactionIndex != -1) {
+						if ( (tx = await this._host.eth.getTransactionFromBlock(blockNumber, transactionIndex)) )
+							tx_r = await this._host.eth.getTransactionReceipt(transactionHash);
+							break;
+					}
+				}
+				return null;
+			} catch(err) {
+				if (j) await utils.sleep(1e3); else throw err; // 1s
+			}
+		}
+
+		if (!tx || !tx_r)
+			return null;
+
+		var transaction = tx;
+		var transactionReceipt = tx_r;
+		// var contract = await this.contract(transaction.to);
+
+		j = 10;
+
+		while (j--) {
+			try {
+				events = await this.getPastEvents(event, {
+					fromBlock: blockNumber, toBlock: blockNumber,
+				});
+				if (events.some(e=>e.transactionHash)) { // have transactionHash
+					events = events.filter(e=>e.transactionHash==transactionHash);
+				} else {
+					events = events.filter(e=>e.blockHash==transaction.blockHash&&e.transactionIndex==transactionIndex);
+				}
+				return events.length ? { events, transaction, transactionReceipt }: null;
+			} catch(err) {
+				if (j)
+					await utils.sleep(1e3);
+				else
+					console.error(err); //throw err; // 1s
+			}
+		}
+
+		return null;
+	}
+
+}
+
 export interface TransactionPromise extends Promise<TransactionReceipt> {
 	// sending
 	// sent
@@ -186,6 +271,7 @@ export class Web3Z implements IWeb3Z {
 	TRANSACTION_CHECK_TIME = TRANSACTION_CHECK_TIME;
 
 	private getProviderFrom(provider: provider) {
+
 		var { HttpProvider, WebsocketProvider, IpcProvider } = Web3.providers;
 		if (typeof provider == 'string') {
 			if (/^https?:/.test(provider)) { // http
@@ -250,9 +336,8 @@ export class Web3Z implements IWeb3Z {
 
 	createContract(contractAddress: string, abi: any[]) {
 		var self = this;
-		var contract = new self.eth.Contract(abi, contractAddress) as Contract;
 
-		contract.findEvent = (event: string, blockNumber: number, hash: string)=>this._FindEvent(contract, event, blockNumber, hash);
+		var contract = new Contract(this, abi, contractAddress) as Contract;
 
 		async function signTx(method: ContractSendMethod, opts?: TxOptions) {
 			var _opts = Object.assign(opts, {
@@ -300,74 +385,6 @@ export class Web3Z implements IWeb3Z {
 		});
 
 		return contract as Contract;
-	}
-
-	private async _FindEvent(contract: Contract, eventName: string, blockNumber: number, transactionHash: string): Promise<FindEventResult | null> {
-		var j = 10;
-
-		while (j--) { // 确保本块已同步
-			var num = await this.eth.getBlockNumber();
-			if (num >= blockNumber) {
-				break;
-			}
-			await utils.sleep(1e4); // 10s
-		}
-
-		j = 10;
-
-		// read event data
-		var tx: Transaction | null = null;
-		var tx_r: TransactionReceipt | null = null;
-		var transactionIndex: number;
-		var events: EventData[];
-
-		while (j--) { // 重试10次,10次后仍然不能从链上查询到txid,丢弃
-			try {
-				var block = await this.eth.getBlock(blockNumber);// as Transaction[];
-				if (block) {
-					var transactions = block.transactions as string[];
-					var transactionIndex = transactions.indexOf(transactionHash);
-					if (transactionIndex != -1) {
-						if ( (tx = await this.eth.getTransactionFromBlock(blockNumber, transactionIndex)) )
-							tx_r = await this.eth.getTransactionReceipt(transactionHash);
-							break;
-					}
-				}
-				return null;
-			} catch(err) {
-				if (j) await utils.sleep(1e3); else throw err; // 1s
-			}
-		}
-
-		if (!tx || !tx_r)
-			return null;
-
-		var transaction = tx;
-		var transactionReceipt = tx_r;
-		// var contract = await this.contract(transaction.to);
-
-		j = 10;
-
-		while (j--) {
-			try {
-				events = await contract.getPastEvents(eventName, {
-					fromBlock: blockNumber, toBlock: blockNumber,
-				});
-				if (events.some(e=>e.transactionHash)) { // have transactionHash
-					events = events.filter(e=>e.transactionHash==transactionHash);
-				} else {
-					events = events.filter(e=>e.blockHash==transaction.blockHash&&e.transactionIndex==transactionIndex);
-				}
-				return events.length ? { events, transaction, transactionReceipt }: null;
-			} catch(err) {
-				if (j)
-					await utils.sleep(1e3);
-				else
-					console.error(err); //throw err; // 1s
-			}
-		}
-
-		return null;
 	}
 
 	private async setTx(tx: TxOptions, estimateGas?: (tx: TxOptions)=>Promise<number>) {
