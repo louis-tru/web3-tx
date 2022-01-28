@@ -34,7 +34,7 @@ import errno from './errno';
 import './_fix_contract';
 import __Web3 from 'web3';
 import * as net from 'net';
-import {Contract as ContractRaw, Options as ContractOptions, 
+import {Contract as __Contract, Options as ContractOptions, 
 	EventData, CallOptions, SendOptions, ContractSendMethod as ContractSendMethodRaw } from 'web3-eth-contract';
 import {Transaction,TransactionReceipt,provider,PromiEvent } from 'web3-core';
 import {BlockTransactionString as Block} from 'web3-eth';
@@ -42,6 +42,8 @@ import { Eth } from 'web3-eth';
 import {AbiItem} from 'web3-utils';
 
 import './_fix_web3';
+
+class ContractBase extends (require('web3-eth-contract') as typeof __Contract) {};
 
 export class Web3 extends (require('web3') as typeof __Web3) {};
 
@@ -95,7 +97,7 @@ export interface ContractMethod {
 	<A extends any[]>(...args: A): ContractSendMethod;
 }
 
-export interface Contract extends ContractRaw {
+export interface Contract extends ContractBase {
 	readonly methods: {
 		[method: string]: ContractMethod;
 	};
@@ -316,7 +318,7 @@ function sendTransactionCheck(self: Web3Z, peceipt: PromiEvent<TransactionReceip
 	});
 }
 
-export class Contract extends ContractRaw {
+export class Contract extends ContractBase {
 	private _host: Web3Z;
 
 	constructor(host: Web3Z, jsonInterface: AbiItem[], address: string, options?: ContractOptions) {
