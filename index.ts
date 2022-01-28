@@ -486,7 +486,7 @@ export class Web3Z implements IWeb3Z {
 	set provider(provider: provider) {
 		if (!this._web3) {
 			this._web3 = new Web3(this.getProviderFrom(provider));
-			(this._web3.eth as any).Contract = null;
+			(this._web3.eth as any).Contract = null; // cause memory overflow error
 		} else {
 			this._web3.setProvider(this.getProviderFrom(provider));
 		}
