@@ -147,13 +147,234 @@ class TxSigner {
 	}
 }
 
+export interface TransactionPromise extends Promise<TransactionReceipt> {
+	// sending
+	// sent
+	// transactionHash
+	// receipt
+	// confirmation
+	// error
+	hash(cb: SendCallback): this;
+}
+
+export class TransactionPromiseIMPL extends utils.PromiseNx<TransactionReceipt> implements TransactionPromise {
+	private _hash?: SendCallback;
+	hash(cb: SendCallback) {
+		this._hash = cb;
+		return this;
+	}
+	getHash() {
+		return this._hash;
+	}
+	static proxy(exec: ()=>Promise<{promise:TransactionPromise}>): TransactionPromise {
+		return new TransactionPromiseIMPL(async (r, j, p)=>{
+			var p_ = p as TransactionPromiseIMPL;
+			var e = await exec();
+			e.promise.hash(_=>{
+				var cb = p_.getHash();
+				if (cb)
+					cb(_);
+			});
+			r(await e.promise);
+		});
+	}
+}
+
+async function setTx(self: Web3Z, tx: TxOptions, estimateGas?: (tx: TxOptions)=>Promise<number>) {
+	estimateGas = estimateGas || ((tx: TxOptions)=>self.eth.estimateGas(tx));
+	tx.from = tx.from || await self.defaultAccount();
+	tx.nonce = tx.nonce || await self.eth.getTransactionCount(tx.from);
+	tx.chainId = tx.chainId || await self.eth.getChainId();
+	tx.value = tx.value || '0x0';
+	tx.data = tx.data || '0x';
+
+	if (!tx.gas)
+		tx.gas = await estimateGas({...tx,
+			chainId: '0x' + tx.chainId.toString(16),
+			nonce: '0x' + tx.nonce.toString(16),
+		} as any);
+	if (!tx.gasLimit) // 程序运行时步数限制 default
+		tx.gasLimit = parseInt(String(tx.gas * 1.2)); // suggested gas limit
+	if (!tx.gasPrice) // 程序运行单步的wei数量wei default
+		tx.gasPrice = Number(await self.eth.getGasPrice()) || self.gasPrice;
+}
+
+function sendTransactionCheck(self: Web3Z, peceipt: PromiEvent<TransactionReceipt>, opts: STOptions = {}): TransactionPromise {
+	var eth = self.eth;
+	var TIMEOUT_ERRNO = errno.ERR_REQUEST_TIMEOUT[0];
+
+	return new TransactionPromiseIMPL(async function (resolve, reject, p) {
+		// send signed Transaction
+		var id = utils.getId();
+		console.log('send signed Transaction', id);
+		// event: transactionHash,receipt,confirmation
+
+		var pp = p as TransactionPromiseIMPL;
+		var id = utils.getId();
+
+		var blockNumber = await self.getBlockNumber();
+
+		opts = opts || {};
+
+		var timeout = (Number(opts.timeout) || SAFE_TRANSACTION_MAX_TIMEOUT) + Date.now();
+		var block_range = Number(opts.blockRange) || TRANSACTION_MAX_BLOCK_RANGE;
+		var limit_block = blockNumber + block_range;
+		var completed = false
+		var is_check = false;
+		var txHash = '';
+		var rawReceipt: TransactionReceipt | undefined;
+
+		function complete(err?: Error, receipt?: TransactionReceipt) {
+			if (!completed) {
+				completed = true;
+				if (receipt) {
+					receipt = Object.assign(rawReceipt || {}, receipt);
+					if (receipt.status) {
+						err = undefined;
+					} else {
+						if (!err) {
+							err = Error.new(errno.ERR_ETH_TRANSACTION_FAIL);
+						}
+					}
+					receipt = utils.clone(receipt); // fix clear rawReceipt props error
+				}
+				console.log('send signed Transaction complete', id, err, receipt);
+				err ? reject(Object.assign(Error.new(err), {receipt})): resolve(receipt as TransactionReceipt);
+			}
+		}
+
+		async function check_receipt() {
+			utils.assert(txHash, 'argument bad');
+			if (is_check)
+				return;
+			is_check = true;
+
+			while (!completed) {
+				var receipt;
+				try {
+					receipt = await eth.getTransactionReceipt(txHash);
+				} catch(err: any) {
+					if (err.code != TIMEOUT_ERRNO) { // timeout
+						console.warn(err);
+					} else {
+						console.warn(err);
+					}
+				}
+				if (receipt && receipt.blockHash) {
+					complete(undefined, receipt);
+				} else if (timeout < Date.now()) {
+					complete(Error.new(errno.ERR_REQUEST_TIMEOUT));
+				} else {
+					var blockNumber = 0;
+					try {
+						blockNumber = await self.getBlockNumber();
+					} catch(err) {
+						console.warn(err);
+					}
+					if (blockNumber && blockNumber > limit_block) {
+						complete(Error.new(errno.ERR_ETH_TRANSACTION_FAIL));
+					}
+				}
+				await utils.sleep(self.TRANSACTION_CHECK_TIME);
+			}
+		}
+
+		peceipt
+		.on('transactionHash', (hash: string)=>{
+			txHash = hash;
+			var cb = pp.getHash();
+			if (cb)
+				cb(hash);
+		})
+		.then(e=>{
+			// console.log('_sendTransactionCheck . then', e);
+			txHash = e.transactionHash;
+			rawReceipt = e;
+			check_receipt().catch(console.error);
+		})
+		.catch(async (e: Error)=>{
+			if (!completed) {
+				if (txHash) {
+					try {
+						var receipt = await eth.getTransactionReceipt(txHash);
+						if (receipt && receipt.blockHash) {
+							complete(e, receipt);
+						}
+					} catch(err) {
+						console.warn(err);
+					}
+					if (!completed) {
+						check_receipt().catch(console.error)
+					}
+				} else {
+					complete(e);
+				}
+			}
+		});
+
+		// end
+	});
+}
+
 export class Contract extends ContractRaw {
 	private _host: Web3Z;
 
-	constructor(host: Web3Z, jsonInterface: AbiItem[], address?: string, options?: ContractOptions) {
+	constructor(host: Web3Z, jsonInterface: AbiItem[], address: string, options?: ContractOptions) {
 		super(jsonInterface, address, options);
 		this._host = host;
 		this.setHost(host);
+		this._Init(jsonInterface, address);
+	}
+
+	private _Init(jsonInterface: AbiItem[], address: string) {
+		var self = this;
+
+		async function signTx(method: ContractSendMethod, opts?: TxOptions) {
+			var _opts = Object.assign(opts, {
+				to: address,
+				data: method.encodeABI(),
+			});
+			var ib = await self._host.signTx(_opts);
+			return ib;
+		}
+
+		function sendSignTransaction(method: ContractSendMethod, opts?: TxOptions, callback?: (hash: string) => void) {
+			return TransactionPromiseIMPL.proxy(async ()=>{
+				var tx = await signTx(method, opts);
+				var promise = self._host.sendSignedTransaction(tx.data, opts, callback);
+				return {promise};
+			});
+		}
+
+		function sendTransaction(method: ContractSendMethod, _opts?: TxOptions) {
+			return TransactionPromiseIMPL.proxy(async ()=>{
+				var opts = _opts || {};
+				await setTx(self._host, opts, (tx)=>method.estimateGas(tx));
+				var promise1 = method.send(opts as SendOptions) as unknown as PromiEvent<TransactionReceipt>
+				var promise = sendTransactionCheck(self._host, promise1, opts);
+				return {promise};
+			});
+		}
+
+		// TODO extend method signedTransaction() and sendSignedTransaction()
+		jsonInterface.forEach(function({ name }) {
+			if (name == 'function') {
+				var { methods } = self;
+				var raw = methods[name];
+				methods[name] = (...args: any[])=>{
+					var method = raw.call(methods, ...args) as ContractSendMethod;
+					var call = method.call;
+					method.signTx = e=>signTx(method, e),
+					method.sendSignTransaction = (e,cb)=>sendSignTransaction(method, e, cb);
+					method.post = e=>sendTransaction(method, e);
+					method.call = function(opts?: any, ...args: any[]) {
+						var { event, retry, timeout, blockRange, ..._opts } = opts || {};
+						return call.call(this, _opts, ...args);
+					};
+					return method;
+				};
+			}
+		});
 	}
 
 	setHost(host: Web3Z) {
@@ -231,39 +452,6 @@ export class Contract extends ContractRaw {
 
 }
 
-export interface TransactionPromise extends Promise<TransactionReceipt> {
-	// sending
-	// sent
-	// transactionHash
-	// receipt
-	// confirmation
-	// error
-	hash(cb: SendCallback): this;
-}
-
-export class TransactionPromiseIMPL extends utils.PromiseNx<TransactionReceipt> implements TransactionPromise {
-	private _hash?: SendCallback;
-	hash(cb: SendCallback) {
-		this._hash = cb;
-		return this;
-	}
-	getHash() {
-		return this._hash;
-	}
-	static proxy(exec: ()=>Promise<{promise:TransactionPromise}>): TransactionPromise {
-		return new TransactionPromiseIMPL(async (r, j, p)=>{
-			var p_ = p as TransactionPromiseIMPL;
-			var e = await exec();
-			e.promise.hash(_=>{
-				var cb = p_.getHash();
-				if (cb)
-					cb(_);
-			});
-			r(await e.promise);
-		});
-	}
-}
-
 export class Web3Z implements IWeb3Z {
 	private _gasPrice = DEFAULT_GAS_PRICE;
 	private _web3?: Web3;
@@ -335,75 +523,7 @@ export class Web3Z implements IWeb3Z {
 	}
 
 	createContract(contractAddress: string, abi: any[]) {
-		var self = this;
-
-		var contract = new Contract(this, abi, contractAddress) as Contract;
-
-		async function signTx(method: ContractSendMethod, opts?: TxOptions) {
-			var _opts = Object.assign(opts, {
-				to: contractAddress,
-				data: method.encodeABI(),
-			});
-			var ib = await self.signTx(_opts);
-			return ib;
-		}
-
-		function sendSignTransaction(method: ContractSendMethod, opts?: TxOptions, callback?: (hash: string) => void) {
-			return TransactionPromiseIMPL.proxy(async ()=>{
-				var tx = await signTx(method, opts);
-				var promise = self.sendSignedTransaction(tx.data, opts, callback);
-				return {promise};
-			});
-		}
-
-		function sendTransaction(method: ContractSendMethod, _opts?: TxOptions) {
-			return TransactionPromiseIMPL.proxy(async ()=>{
-				var opts = _opts || {};
-				await self.setTx(opts, (tx)=>method.estimateGas(tx));
-				var promise1 = method.send(opts as SendOptions) as unknown as PromiEvent<TransactionReceipt>
-				var promise = self._sendTransactionCheck(promise1, opts);
-				return {promise};
-			});
-		}
-
-		// TODO extend method signedTransaction() and sendSignedTransaction()
-		abi.forEach(function({ name }) {
-			var { methods } = contract;
-			var raw = methods[name];
-			methods[name] = (...args: any[])=>{
-				var method = raw.call(methods, ...args) as ContractSendMethod;
-				var call = method.call;
-				method.signTx = e=>signTx(method, e),
-				method.sendSignTransaction = (e,cb)=>sendSignTransaction(method, e, cb);
-				method.post = e=>sendTransaction(method, e);
-				method.call = function(opts?: any, ...args: any[]) {
-					var { event, retry, timeout, blockRange, ..._opts } = opts || {};
-					return call.call(this, _opts, ...args);
-				};
-				return method;
-			};
-		});
-
-		return contract as Contract;
-	}
-
-	private async setTx(tx: TxOptions, estimateGas?: (tx: TxOptions)=>Promise<number>) {
-		estimateGas = estimateGas || ((tx: TxOptions)=>this.eth.estimateGas(tx));
-		tx.from = tx.from || await this.defaultAccount();
-		tx.nonce = tx.nonce || await this.eth.getTransactionCount(tx.from);
-		tx.chainId = tx.chainId || await this.eth.getChainId();
-		tx.value = tx.value || '0x0';
-		tx.data = tx.data || '0x';
-
-		if (!tx.gas)
-			tx.gas = await estimateGas({...tx,
-				chainId: '0x' + tx.chainId.toString(16),
-				nonce: '0x' + tx.nonce.toString(16),
-			} as any);
-		if (!tx.gasLimit) // 程序运行时步数限制 default
-			tx.gasLimit = parseInt(String(tx.gas * 1.2)); // suggested gas limit
-		if (!tx.gasPrice) // 程序运行单步的wei数量wei default
-			tx.gasPrice = Number(await this.eth.getGasPrice()) || this.gasPrice;
+		return new Contract(this, abi, contractAddress);
 	}
 
 	/**
@@ -423,7 +543,7 @@ export class Web3Z implements IWeb3Z {
 		}
 		var { event, retry, timeout, blockRange, ..._opts } = Object.assign({}, opts);
 
-		await this.setTx(_opts);
+		await setTx(this, _opts);
 
 		console.log('signTx, TxOptions =', _opts);
 
@@ -436,135 +556,13 @@ export class Web3Z implements IWeb3Z {
 	}
 
 	/**
-	 * @func _sendTransactionCheck()
-	 * @private
-	 */
-	private _sendTransactionCheck(peceipt: PromiEvent<TransactionReceipt>, opts: STOptions = {}): TransactionPromise {
-		var self = this;
-		var eth = this.eth;
-		var TIMEOUT_ERRNO = errno.ERR_REQUEST_TIMEOUT[0];
-
-		return new TransactionPromiseIMPL(async function (resolve, reject, p) {
-			// send signed Transaction
-			var id = utils.getId();
-			console.log('send signed Transaction', id);
-			// event: transactionHash,receipt,confirmation
-
-			var pp = p as TransactionPromiseIMPL;
-			var id = utils.getId();
-
-			var blockNumber = await self.getBlockNumber();
-
-			opts = opts || {};
-
-			var timeout = (Number(opts.timeout) || SAFE_TRANSACTION_MAX_TIMEOUT) + Date.now();
-			var block_range = Number(opts.blockRange) || TRANSACTION_MAX_BLOCK_RANGE;
-			var limit_block = blockNumber + block_range;
-			var completed = false
-			var is_check = false;
-			var txHash = '';
-			var rawReceipt: TransactionReceipt | undefined;
-
-			function complete(err?: Error, receipt?: TransactionReceipt) {
-				if (!completed) {
-					completed = true;
-					if (receipt) {
-						receipt = Object.assign(rawReceipt || {}, receipt);
-						if (receipt.status) {
-							err = undefined;
-						} else {
-							if (!err) {
-								err = Error.new(errno.ERR_ETH_TRANSACTION_FAIL);
-							}
-						}
-						receipt = utils.clone(receipt); // fix clear rawReceipt props error
-					}
-					console.log('send signed Transaction complete', id, err, receipt);
-					err ? reject(Object.assign(Error.new(err), {receipt})): resolve(receipt as TransactionReceipt);
-				}
-			}
-
-			async function check_receipt() {
-				utils.assert(txHash, 'argument bad');
-				if (is_check)
-					return;
-				is_check = true;
-
-				while (!completed) {
-					var receipt;
-					try {
-						receipt = await eth.getTransactionReceipt(txHash);
-					} catch(err: any) {
-						if (err.code != TIMEOUT_ERRNO) { // timeout
-							console.warn(err);
-						} else {
-							console.warn(err);
-						}
-					}
-					if (receipt && receipt.blockHash) {
-						complete(undefined, receipt);
-					} else if (timeout < Date.now()) {
-						complete(Error.new(errno.ERR_REQUEST_TIMEOUT));
-					} else {
-						var blockNumber = 0;
-						try {
-							blockNumber = await self.getBlockNumber();
-						} catch(err) {
-							console.warn(err);
-						}
-						if (blockNumber && blockNumber > limit_block) {
-							complete(Error.new(errno.ERR_ETH_TRANSACTION_FAIL));
-						}
-					}
-					await utils.sleep(self.TRANSACTION_CHECK_TIME);
-				}
-			}
-
-			peceipt
-			.on('transactionHash', (hash: string)=>{
-				txHash = hash;
-				var cb = pp.getHash();
-				if (cb)
-					cb(hash);
-			})
-			.then(e=>{
-				// console.log('_sendTransactionCheck . then', e);
-				txHash = e.transactionHash;
-				rawReceipt = e;
-				check_receipt().catch(console.error);
-			})
-			.catch(async (e: Error)=>{
-				if (!completed) {
-					if (txHash) {
-						try {
-							var receipt = await eth.getTransactionReceipt(txHash);
-							if (receipt && receipt.blockHash) {
-								complete(e, receipt);
-							}
-						} catch(err) {
-							console.warn(err);
-						}
-						if (!completed) {
-							check_receipt().catch(console.error)
-						}
-					} else {
-						complete(e);
-					}
-				}
-			});
-
-			// end
-		});
-	}
-
-	/**
 	 * @func sendTransaction(tx) 发送交易数据(不签名)
 	 */
 	sendTransaction(tx: TxOptions, callback?: (hash: string) => void) {
 		var cb = callback || function(){};
 		return TransactionPromiseIMPL.proxy(async()=>{
-			await this.setTx(tx);
-			var promise = this._sendTransactionCheck(this.eth.sendTransaction(tx, (e,h)=>!e&&h&&cb(h)), tx);
+			await setTx(this, tx);
+			var promise = sendTransactionCheck(this, this.eth.sendTransaction(tx, (e,h)=>!e&&h&&cb(h)), tx);
 			return {promise};
 		});
 	}
@@ -585,7 +583,7 @@ export class Web3Z implements IWeb3Z {
 	 */
 	sendSignedTransaction(serializedTx: IBuffer, opts?: STOptions, callback?: (hash: string) => void) {
 		var cb = callback || function(){};
-		return this._sendTransactionCheck(
+		return sendTransactionCheck(this,
 			this.eth.sendSignedTransaction('0x' + serializedTx.toString('hex'), (e,h)=>!e&&h&&cb(h)), opts);
 	}
 
