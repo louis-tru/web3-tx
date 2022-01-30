@@ -320,12 +320,21 @@ function sendTransactionCheck(self: Web3Z, peceipt: PromiEvent<TransactionReceip
 
 export class Contract extends ContractBase {
 	private _host: Web3Z;
+	private __requestManager: any;
 
 	constructor(host: Web3Z, jsonInterface: AbiItem[], address: string, options?: ContractOptions) {
 		super(jsonInterface, address, options);
 		this._host = host;
-		this.setHost(host);
 		this._Init(jsonInterface, address);
+		(this as any).setProvider(host.eth);
+	}
+
+	private set _requestManager(v:any) {
+		this.__requestManager = v;
+	}
+	
+	private get _requestManager() {
+		return this._host ? (this._host.web3 as any)._requestManager: this.__requestManager;
 	}
 
 	private _Init(jsonInterface: AbiItem[], address: string) {
@@ -377,11 +386,6 @@ export class Contract extends ContractBase {
 				};
 			}
 		});
-	}
-
-	setHost(host: Web3Z) {
-		this._host = host;
-		(this as any).setProvider(host.eth);
 	}
 
 	async findEvent(event: string, blockNumber: number, transactionHash: string) {
@@ -488,7 +492,7 @@ export class Web3Z implements IWeb3Z {
 	set provider(provider: provider) {
 		if (!this._web3) {
 			this._web3 = new Web3(this.getProviderFrom(provider));
-			(this._web3.eth as any).Contract = null; // cause memory overflow error
+			(this._web3.eth as any).Contract = {}; // cause memory overflow error
 		} else {
 			this._web3.setProvider(this.getProviderFrom(provider));
 		}
@@ -497,7 +501,7 @@ export class Web3Z implements IWeb3Z {
 	get web3() {
 		if (!this._web3) {
 			this._web3 = new Web3(this.getProviderFrom(this.givenProvider()));
-			(this._web3.eth as any).Contract = null;
+			(this._web3.eth as any).Contract = {};
 		}
 		return this._web3 as Web3;
 	}
