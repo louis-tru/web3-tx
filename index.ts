@@ -45,6 +45,8 @@ import './_fix_web3';
 
 class ContractBase extends (require('web3-eth-contract') as typeof __Contract) {};
 
+var requestManager = require('web3-core-requestmanager');
+
 export class Web3 extends (require('web3') as typeof __Web3) {};
 
 export { ContractOptions, EventData, Transaction, TransactionReceipt, Block, CallOptions, SendOptions };
@@ -335,6 +337,21 @@ export class Contract extends ContractBase {
 	
 	private get _requestManager() {
 		return this._host ? (this._host.web3 as any)._requestManager: this.__requestManager;
+	}
+
+	private set _provider(v:any) {}
+
+	private get _provider() {
+		return this._requestManager.provider;
+	}
+
+	private set BatchRequest(v: any) {}
+
+	private get BatchRequest() {
+		var self = this;
+		return function (...args: any) {
+			return requestManager.BatchManager(self._requestManager, ...args);
+		}
 	}
 
 	private _Init(jsonInterface: AbiItem[], address: string) {
