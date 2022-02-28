@@ -119,7 +119,7 @@ export class TransactionQueue {
 	async push<R>(exec: (arg: DeOptions)=>Promise<R>, opts?: Options): Promise<R> {
 
 		var options = {from: '', retry: 0, timeout: TRANSACTION_NONCE_TIMEOUT, ...opts};
-		var from = options.from = options.from || await this._host.defaultAccount();
+		var from = (options.from = options.from || await this._host.defaultAccount()).toLowerCase();
 		var retry = options.retry = Number(options.retry) || 0;
 		var timeout = options.timeout = Number(options.timeout) || 0;
 		var queue = this._tx_queues[from];

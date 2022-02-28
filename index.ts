@@ -90,9 +90,8 @@ export interface ContractSendMethod extends ContractSendMethodRaw {
 	 * returns serializedTx
 	 */
 	signTx(options?: TxOptions): Promise<SerializedTx>;
-	sendSignTransaction(options?: TxOptions, callback?: (hash: string) => void): TransactionPromise;
-	post(opts: TxOptions): TransactionPromise;
-
+	post(options?: TxOptions, callback?: (hash: string) => void): TransactionPromise;
+	sendRaw(opts: TxOptions, callback?: (hash: string) => void): TransactionPromise;
 }
 
 export interface ContractMethod {
@@ -103,7 +102,7 @@ export interface Contract extends ContractBase {
 	readonly methods: {
 		[method: string]: ContractMethod;
 	};
-	findEvent(event: string, blockNumber: number, transactionHash: string): Promise<FindEventResult | null>;
+	findEvent(event: string, transactionHash: string, blockNumber?: number): Promise<FindEventResult | null>;
 }
 
 export interface Signature {
@@ -374,11 +373,12 @@ export class Contract extends ContractBase {
 			});
 		}
 
-		function sendTransaction(method: ContractSendMethod, _opts?: TxOptions) {
+		function sendTransaction(method: ContractSendMethod, _opts?: TxOptions, callback?: (hash: string) => void) {
 			return TransactionPromiseIMPL.proxy(async ()=>{
 				var opts = _opts || {};
+				var cb = callback || function(){};
 				await setTx(self._host, opts, (tx)=>method.estimateGas(tx));
-				var promise1 = method.send(opts as SendOptions) as unknown as PromiEvent<TransactionReceipt>
+				var promise1 = method.send(opts as SendOptions, (e,h)=>!e&&h&&cb(h)) as unknown as PromiEvent<TransactionReceipt>
 				var promise = sendTransactionCheck(self._host, promise1, opts);
 				return {promise};
 			});
@@ -393,8 +393,8 @@ export class Contract extends ContractBase {
 					var method = raw.call(methods, ...args) as ContractSendMethod;
 					var call = method.call;
 					method.signTx = e=>signTx(method, e),
-					method.sendSignTransaction = (e,cb)=>sendSignTransaction(method, e, cb);
-					method.post = e=>sendTransaction(method, e);
+					method.post = (e,cb)=>sendSignTransaction(method, e, cb);
+					method.sendRaw = (e,cb)=>sendTransaction(method, e, cb);
 					method.call = function(opts?: any, ...args: any[]) {
 						var { event, retry, timeout, blockRange, ..._opts } = opts || {};
 						return call.call(this, _opts, ...args);
@@ -405,15 +405,17 @@ export class Contract extends ContractBase {
 		});
 	}
 
-	async findEvent(event: string, blockNumber: number, transactionHash: string) {
+	async findEvent(event: string, transactionHash: string, blockNumber?: number) {
 		var j = 10;
 
-		while (j--) { // 确保本块已同步
-			var num = await this._host.eth.getBlockNumber();
-			if (num >= blockNumber) {
-				break;
+		if (blockNumber) {
+			while (j--) { // 确保本块已同步
+				var num = await this._host.eth.getBlockNumber();
+				if (num >= blockNumber) {
+					break;
+				}
+				await utils.sleep(1e4); // 10s
 			}
-			await utils.sleep(1e4); // 10s
 		}
 
 		j = 10;
@@ -426,17 +428,11 @@ export class Contract extends ContractBase {
 
 		while (j--) { // 重试10次,10次后仍然不能从链上查询到txid,丢弃
 			try {
-				var block = await this._host.eth.getBlock(blockNumber);// as Transaction[];
-				if (block) {
-					var transactions = block.transactions as string[];
-					var transactionIndex = transactions.indexOf(transactionHash);
-					if (transactionIndex != -1) {
-						if ( (tx = await this._host.eth.getTransactionFromBlock(blockNumber, transactionIndex)) )
-							tx_r = await this._host.eth.getTransactionReceipt(transactionHash);
-							break;
-					}
+				tx = await this._host.eth.getTransaction(transactionHash);
+				if (tx) {
+					tx_r = await this._host.eth.getTransactionReceipt(transactionHash);
+					break;
 				}
-				return null;
 			} catch(err) {
 				if (j) await utils.sleep(1e3); else throw err; // 1s
 			}

@@ -174,9 +174,9 @@ export default class HappyContract<T> {
 			// post
 			if (_web3.sign) {
 				if (_queue) {
-					receipt = _queue.push(e=>method.sendSignTransaction({...opts, ...e}), opts);
+					receipt = _queue.push(e=>method.post({...opts, ...e}), opts);
 				} else {
-					receipt = method.sendSignTransaction(opts);
+					receipt = method.post(opts);
 				}
 			} else {
 				if (_queue) {
@@ -212,8 +212,8 @@ export default class HappyContract<T> {
 		return this._contract.options.address;
 	}
 
-	async findEvent(event: string, blockNumber: number, transactionHash: string): Promise<EventData[] | null> {
-		var evt = await this._contract.findEvent(event, blockNumber, transactionHash);
+	async findEvent(event: string, transactionHash: string, blockNumber?: number): Promise<EventData[] | null> {
+		var evt = await this._contract.findEvent(event, transactionHash, blockNumber);
 		return evt?.events || null;
 	}
 
@@ -222,7 +222,7 @@ export default class HappyContract<T> {
 			var e = receipt.events[event];
 			return (Array.isArray(e) ? e: [e]) as EventData[];
 		} else {
-			var evt = await this.findEvent(event, receipt.blockNumber, receipt.transactionHash);
+			var evt = await this.findEvent(event, receipt.transactionHash,  receipt.blockNumber);
 			somes.assert(evt, `not event Sell ${event}`);
 			return evt as EventData[];
 		}
