@@ -199,7 +199,7 @@ async function setTx(self: Web3Z, tx: TxOptions, estimateGas?: (tx: TxOptions)=>
 	if (!tx.gasLimit) // 程序运行时步数限制 default
 		tx.gasLimit = parseInt(String(tx.gas * 1.2)); // suggested gas limit
 	if (!tx.gasPrice) // 程序运行单步的wei数量wei default
-		tx.gasPrice = await self.getGasPrice() || DEFAULT_GAS_PRICE;
+		tx.gasPrice = await self.gasPrice() || DEFAULT_GAS_PRICE;
 }
 
 function sendTransactionCheck(self: Web3Z, peceipt: PromiEvent<TransactionReceipt>, opts: STOptions = {}): TransactionPromise {
@@ -523,7 +523,7 @@ export class Web3Z implements IWeb3Z {
 		return this.web3.defaultAccount || (await this.eth.getAccounts())[0] || '';
 	}
 
-	async getGasPrice() {
+	async gasPrice() {
 		return Number(await this.eth.getGasPrice());
 	}
 
