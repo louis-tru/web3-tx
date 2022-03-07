@@ -120,7 +120,7 @@ export type SendCallback = (hash: string) => void;
 export interface IWeb3Z {
 	readonly web3: Web3;
 	readonly eth: Eth;
-	readonly gasPrice: number;
+	gasPrice(): Promise<number>;
 	defaultAccount(): Promise<string>;
 	createContract(address: string, abi: any[]): Contract;
 	sendTransaction(tx: TxOptions): TransactionPromise;
@@ -199,7 +199,7 @@ async function setTx(self: Web3Z, tx: TxOptions, estimateGas?: (tx: TxOptions)=>
 	if (!tx.gasLimit) // 程序运行时步数限制 default
 		tx.gasLimit = parseInt(String(tx.gas * 1.2)); // suggested gas limit
 	if (!tx.gasPrice) // 程序运行单步的wei数量wei default
-		tx.gasPrice = Number(await self.eth.getGasPrice()) || self.gasPrice;
+		tx.gasPrice = await self.getGasPrice() || DEFAULT_GAS_PRICE;
 }
 
 function sendTransactionCheck(self: Web3Z, peceipt: PromiEvent<TransactionReceipt>, opts: STOptions = {}): TransactionPromise {
@@ -385,8 +385,8 @@ export class Contract extends ContractBase {
 		}
 
 		// TODO extend method signedTransaction() and sendSignedTransaction()
-		jsonInterface.forEach(function({ name }) {
-			if (name == 'function') {
+		jsonInterface.forEach(function({ name, type }) {
+			if (name && type == 'function') {
 				var { methods } = self;
 				var raw = methods[name];
 				methods[name] = (...args: any[])=>{
@@ -472,7 +472,7 @@ export class Contract extends ContractBase {
 }
 
 export class Web3Z implements IWeb3Z {
-	private _gasPrice = DEFAULT_GAS_PRICE;
+	// private _gasPrice = DEFAULT_GAS_PRICE;
 	private _web3?: Web3;
 
 	TRANSACTION_CHECK_TIME = TRANSACTION_CHECK_TIME;
@@ -523,12 +523,8 @@ export class Web3Z implements IWeb3Z {
 		return this.web3.defaultAccount || (await this.eth.getAccounts())[0] || '';
 	}
 
-	get gasPrice() {
-		return this._gasPrice;
-	}
-
-	set gasPrice(value) {
-		this._gasPrice = Number(value) || DEFAULT_GAS_PRICE;
+	async getGasPrice() {
+		return Number(await this.eth.getGasPrice());
 	}
 
 	get eth() {
