@@ -392,7 +392,7 @@ export class Contract extends ContractBase {
 				methods[name] = (...args: any[])=>{
 					var method = raw.call(methods, ...args) as ContractSendMethod;
 					var call = method.call;
-					method.signTx = e=>signTx(method, e),
+					method.signTx = e=>signTx(method, e);
 					method.post = (e,cb)=>sendSignTransaction(method, e, cb);
 					method.sendRaw = (e,cb)=>sendTransaction(method, e, cb);
 					method.call = function(opts?: any, ...args: any[]) {
