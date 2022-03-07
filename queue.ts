@@ -33,6 +33,7 @@ import {IWeb3Z} from './index';
 import {List} from 'somes/event';
 import errno from './errno';
 
+const TRANSACTION_QUEUE_TIMEOUT = 180 * 1e3;  // 180秒
 const TRANSACTION_NONCE_TIMEOUT = 180 * 1e3;  // 180秒
 const TRANSACTION_NONCE_TIMEOUT_MAX = 300 * 1e3;  // 300秒
 
@@ -40,24 +41,22 @@ export interface DeOptions {
 	from: string;
 	nonce: number;
 	gasPrice: number;
-}
-
-export interface Nonce extends DeOptions {
-	timeout: number;
+	nonceTimeout: number;
 }
 
 export interface Options {
 	from?: string;
 	retry?: number;
-	timeout?: number;
+	queueTimeout?: number;
+	nonceTimeout?: number;
 }
 
 interface queue_context {
 	retry: number;
 	options: Options;
-	timeout: number;
+	queueTimeout: number;
 	timeout_reject: ()=>void;
-	dequeue: (nonce: Nonce | null)=>Promise<any>
+	dequeue: (nonce: DeOptions | null)=>Promise<any>
 }
 
 interface Queue { list: List<queue_context>; running: boolean; }
@@ -67,7 +66,7 @@ export class TransactionQueue {
 
 	private _host: IWeb3Z;
 	private _tx_queues: Dict<Queue> = {};
-	private _tx_nonceObjs: Dict<Dict<Nonce>> = {};
+	private _tx_nonceObjs: Dict<Dict<DeOptions>> = {};
 
 	constructor(web3: IWeb3Z) {
 		this._host = web3;
@@ -85,7 +84,8 @@ export class TransactionQueue {
 		var item = queue.list.first;
 		while (item) {
 			var next = item.next;
-			if (now > item.value.timeout) { // timeout
+			var timeout = item.value.queueTimeout;
+			if (timeout && now > timeout) { // timeout
 				item.value.timeout_reject();
 				queue.list.del(item);
 			}
@@ -100,7 +100,7 @@ export class TransactionQueue {
 			try {
 				var ctx = first.value;
 				await this.beforeDequeue();
-				var nonce = await this.getNonce_(ctx.options.from);
+				var nonce = await this.getNonce_(ctx.options.from, ctx.options.nonceTimeout);
 				queue.list.shift();
 				await ctx.dequeue(nonce);
 			} catch (err) {
@@ -118,10 +118,10 @@ export class TransactionQueue {
 	 */
 	async push<R>(exec: (arg: DeOptions)=>Promise<R>, opts?: Options): Promise<R> {
 
-		var options = {from: '', retry: 0, timeout: TRANSACTION_NONCE_TIMEOUT, ...opts};
+		var options = {from: '', retry: 0, queueTimeout: TRANSACTION_QUEUE_TIMEOUT, ...opts};
 		var from = (options.from = options.from || await this._host.defaultAccount()).toLowerCase();
 		var retry = options.retry = Number(options.retry) || 0;
-		var timeout = options.timeout = Number(options.timeout) || 0;
+		var queueTimeout = options.queueTimeout = Number(options.queueTimeout) || 0;
 		var queue = this._tx_queues[from];
 		if (!queue) {
 			this._tx_queues[from] = queue = { list: new List(), running: false };
@@ -131,14 +131,14 @@ export class TransactionQueue {
 			var ctx = {
 				retry,
 				options,
-				timeout: timeout ? timeout + Date.now(): Infinity,
+				queueTimeout: queueTimeout ? queueTimeout + Date.now(): 0,
 				timeout_reject: ()=>{
 					reject(Error.new(errno.ERR_TRANSACTION_TIMEOUT));
 				},
-				dequeue: async (nonce: Nonce | null)=>{
+				dequeue: async (opts: DeOptions | null)=>{
 					try {
-						if (nonce) {
-							resolve(await exec(nonce));
+						if (opts) {
+							resolve(await exec(opts));
 						} else {
 							queue.list.unshift(ctx);
 							await utils.sleep(5e3); // sleep 5s
@@ -164,26 +164,26 @@ export class TransactionQueue {
 		});
 	}
 
-	private async getNonce_(account?: string, _timeout?: number, greedy?: boolean): Promise<Nonce | null> {
+	private async getNonce_(account?: string, _timeout?: number, greedy?: boolean): Promise<DeOptions | null> {
 		var from = account || await this._host.defaultAccount();
 		utils.assert(from, 'getNonce error account empty');
 
 		var now = Date.now();
 		var nonces = (this._tx_nonceObjs[from] || (this._tx_nonceObjs[from] = {}));
 		var nonce = await this._host.getNonce(account);
-		var timeout = Math.min(TRANSACTION_NONCE_TIMEOUT_MAX, _timeout || TRANSACTION_NONCE_TIMEOUT) + now;
+		var nonceTimeout = Math.min(TRANSACTION_NONCE_TIMEOUT_MAX, _timeout || TRANSACTION_NONCE_TIMEOUT) + now;
 		var gasPrice = await this._host.gasPrice();
 
-		for (var i = nonce, o: Nonce; (o = nonces[i]); i++) {
-			if (now > o.timeout) { // pending and is timeout
-				o.timeout = timeout;
-				o.gasPrice+=10;
+		for (var i = nonce, o: DeOptions; (o = nonces[i]); i++) {
+			if (now > o.nonceTimeout) { // pending and is timeout
+				o.nonceTimeout = nonceTimeout;
+				o.gasPrice = Math.max(gasPrice, o.gasPrice + 10);
 				return o;
 			}
 		}
 
 		if (greedy || nonce == i) {
-			return o = nonces[i] = { from, nonce: i, timeout, gasPrice };
+			return o = nonces[i] = { from, nonce: i, nonceTimeout, gasPrice };
 		}
 
 		return null;
@@ -192,9 +192,9 @@ export class TransactionQueue {
 	/**
 	 * @func getNonce() 获取排队nonce
 	 */
-	async getNonce(account?: string, timeout?: number): Promise<Nonce> {
+	async getNonce(account?: string, timeout?: number): Promise<DeOptions> {
 		var nonce = await this.getNonce_(account, timeout, true);
-		return nonce as Nonce;
+		return nonce as DeOptions;
 	}
 
 }

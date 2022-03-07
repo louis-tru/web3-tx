@@ -66,12 +66,12 @@ export interface FindEventResult {
 	transactionReceipt: TransactionReceipt;
 }
 
-export interface SendTransactionOprions extends Dict {
+export interface SendTransactionOptions extends Dict {
 	timeout?: number;
 	blockRange?: number;
 }
 
-export type STOptions = SendTransactionOprions;
+export type STOptions = SendTransactionOptions;
 
 export interface TxOptions extends STOptions {
 	chainId?: number;
@@ -200,6 +200,18 @@ async function setTx(self: Web3Z, tx: TxOptions, estimateGas?: (tx: TxOptions)=>
 		tx.gasLimit = parseInt(String(tx.gas * 1.2)); // suggested gas limit
 	if (!tx.gasPrice) // 程序运行单步的wei数量wei default
 		tx.gasPrice = await self.gasPrice() || DEFAULT_GAS_PRICE;
+
+	return {
+		from: tx.from,
+		to: tx.to || '',
+		nonce: tx.nonce,
+		chainId: tx.chainId,
+		value: tx.value,
+		data: tx.data,
+		gas: tx.gas,
+		gasLimit: tx.gasLimit,
+		gasPrice: tx.gasPrice,
+	};
 }
 
 function sendTransactionCheck(self: Web3Z, peceipt: PromiEvent<TransactionReceipt>, opts: STOptions = {}): TransactionPromise {
@@ -377,7 +389,7 @@ export class Contract extends ContractBase {
 			return TransactionPromiseIMPL.proxy(async ()=>{
 				var opts = _opts || {};
 				var cb = callback || function(){};
-				await setTx(self._host, opts, (tx)=>method.estimateGas(tx));
+				var tx = await setTx(self._host, opts, (tx)=>method.estimateGas(tx));
 				var promise1 = method.send(opts as SendOptions, (e,h)=>!e&&h&&cb(h)) as unknown as PromiEvent<TransactionReceipt>
 				var promise = sendTransactionCheck(self._host, promise1, opts);
 				return {promise};
@@ -396,8 +408,8 @@ export class Contract extends ContractBase {
 					method.post = (e,cb)=>sendSignTransaction(method, e, cb);
 					method.sendRaw = (e,cb)=>sendTransaction(method, e, cb);
 					method.call = function(opts?: any, ...args: any[]) {
-						var { event, retry, timeout, blockRange, ..._opts } = opts || {};
-						return call.call(this, _opts, ...args);
+						var {from, gasPrice, gas} = opts || {};
+						return call.call(this, {from, gasPrice, gas}, ...args);
 					};
 					return method;
 				};
@@ -560,11 +572,11 @@ export class Web3Z implements IWeb3Z {
 		}
 		var { event, retry, timeout, blockRange, ..._opts } = Object.assign({}, opts);
 
-		await setTx(this, _opts);
+		var txOpts = await setTx(this, _opts);
 
 		console.log('signTx, TxOptions =', _opts);
 
-		var tx = await crypto_tx.signTx(new TxSigner(this, _opts.from as string), _opts);
+		var tx = await crypto_tx.signTx(new TxSigner(this, _opts.from as string), txOpts);
 
 		return {
 			data: buffer.from(tx.serializedTx),
@@ -578,8 +590,8 @@ export class Web3Z implements IWeb3Z {
 	sendTransaction(tx: TxOptions, callback?: (hash: string) => void) {
 		var cb = callback || function(){};
 		return TransactionPromiseIMPL.proxy(async()=>{
-			await setTx(this, tx);
-			var promise = sendTransactionCheck(this, this.eth.sendTransaction(tx, (e,h)=>!e&&h&&cb(h)), tx);
+			var tx_ = await setTx(this, tx);
+			var promise = sendTransactionCheck(this, this.eth.sendTransaction(tx_, (e,h)=>!e&&h&&cb(h)), tx);
 			return {promise};
 		});
 	}
