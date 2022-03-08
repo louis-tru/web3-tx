@@ -4,7 +4,7 @@
  */
 
 import somes from 'somes';
-import {IWeb3Z, TransactionPromise, TransactionPromiseIMPL, TransactionReceipt, EventData} from './index';
+import {IWeb3Z, TransactionPromise, TransactionReceipt, EventData} from './index';
 import {TransactionQueue} from './queue';
 import {AbiItem, AbiOutput} from 'web3-utils/types';
 import { Contract, ContractSendMethod } from './index';
@@ -163,30 +163,28 @@ export default class HappyContract<T> {
 		}
 	}
 
-	private async _abiPost(method: ContractSendMethod, opts?: Opts) {
+	private async _abiPost(method: ContractSendMethod, opts?: Opts, cb?: any) {
 		var {_queue,_web3} = this;
 
-		return TransactionPromiseIMPL.proxy(async ()=>{
-			// await method.call(opts as any); // TODO ...
-			opts = opts || {};
-			opts.from = opts.from || await _web3.defaultAccount();
-			var receipt: any;
-			// post
-			if (_web3.sign) {
-				if (_queue) {
-					receipt = _queue.push(e=>method.post({...opts, ...e}), opts);
-				} else {
-					receipt = method.post(opts);
-				}
+		// await method.call(opts as any); // TODO ...
+		opts = opts || {};
+		opts.from = opts.from || await _web3.defaultAccount();
+		var receipt: any;
+		// post
+		if (_web3.sign) {
+			if (_queue) {
+				receipt = _queue.push(e=>method.post({...opts, ...e}, cb), opts);
 			} else {
-				if (_queue) {
-					receipt = _queue.push(e=>method.post({...opts, ...e}), opts);
-				} else {
-					receipt = method.post(opts);
-				}
+				receipt = method.post(opts, cb);
 			}
-			return {promise: receipt};
-		});
+		} else {
+			if (_queue) {
+				receipt = _queue.push(e=>method.post({...opts, ...e}, cb), opts);
+			} else {
+				receipt = method.post(opts, cb);
+			}
+		}
+		return receipt;
 	}
 
 	get api(): T {
@@ -200,7 +198,7 @@ export default class HappyContract<T> {
 					var method = func.call(methods, ...args) as ContractSendMethod;
 					var api = Object.create(method);
 					api.call = (e: any)=>self._abiCall(name, method, e);
-					api.post = (e: any)=>self._abiPost(method, e);
+					api.post = (e: any, cb: any)=>self._abiPost(method, e, cb);
 					return api;
 				};
 			});

@@ -140,8 +140,11 @@ export class TransactionQueue {
 						if (opts) {
 							resolve(await exec(opts));
 						} else {
-							queue.list.unshift(ctx);
-							await utils.sleep(5e3); // sleep 5s
+							queue.list.unshift(ctx); // retry queue
+
+							if (queue.list.length == 1) {
+								await utils.sleep(5e3); // sleep 5s
+							}
 						}
 					} catch(err) {
 						if (ctx.retry--) {
