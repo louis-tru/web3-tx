@@ -90,7 +90,7 @@ export interface TxOptions extends Dict {
 	blockRange?: number; // ext
 }
 
-export type SendCallback = (hash: string, opts: TxOptions) => void;
+export type SendCallback = (hash: string, opts: TxOptions) => any;
 export type TransactionPromise = Promise<TransactionReceipt>;
 
 export interface ContractSendMethod extends ContractSendMethodRaw {
@@ -596,7 +596,7 @@ export class Web3Z implements IWeb3Z {
 		var tx_ = await setTx(this, tx);
 		var txid = await this.sendRpc('eth_sendTransaction', [tx_]);
 		if (cb)
-			cb(txid, tx);
+			await cb(txid, tx);
 		return this._checkTransaction(txid, tx);
 	}
 
@@ -614,7 +614,7 @@ export class Web3Z implements IWeb3Z {
 	async sendSignedTransaction(serializedTx: IBuffer, opts?: TxOptions, cb?: SendCallback) {
 		var txid = await this.sendRawTransaction(serializedTx);
 		if (cb)
-			cb(txid, opts || {});
+			await cb(txid, opts || {});
 		return this._checkTransaction(txid, opts);
 	}
 
