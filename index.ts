@@ -406,6 +406,7 @@ export class Web3Z implements IWeb3Z {
 		blockRange: number;
 		blockNumber: number;
 		timeout: number;
+		noneConfirm: number;
 	}> = new Map();
 
 	private _watching = false;
@@ -422,7 +423,7 @@ export class Web3Z implements IWeb3Z {
 			var blockRange = Number(opts.blockRange) || TRANSACTION_MAX_BLOCK_RANGE;
 			var id = utils.getId();
 			console.log('send signed Transaction', id, txid);
-			this._watchList.set(txid, {id, opts: opts || {}, resolve, reject, timeout, blockNumber, blockRange});
+			this._watchList.set(txid, {id, opts: opts || {}, resolve, reject, timeout, blockNumber, blockRange, noneConfirm: 0});
 			this._watchTx();
 		});
 	}
@@ -490,7 +491,12 @@ export class Web3Z implements IWeb3Z {
 					if (opts.from && opts.nonce) {
 						var nonce = await self.getNonce(opts.from);
 						if (nonce > opts.nonce) { //
-							error( txid, tx.id, Error.new(errno.ERR_TRANSACTION_INVALID) );
+							if (tx.noneConfirm) {
+								if (blockNumber > tx.noneConfirm)
+									error( txid, tx.id, Error.new(errno.ERR_TRANSACTION_INVALID) );
+							} else {
+								tx.noneConfirm = blockNumber;
+							}
 						}
 					}
 				}
