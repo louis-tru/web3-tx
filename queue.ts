@@ -144,7 +144,7 @@ export class TransactionQueue {
 							// if (queue.list.length == 1)
 							await utils.sleep(5e3); // sleep 5s
 						}
-					} catch(err) {
+					} catch(err:any) {
 						if (err.errno == errno.ERR_TRANSACTION_STATUS_FAIL[0] // fail
 							|| err.errno == errno.ERR_TRANSACTION_INVALID[0]    // invalid
 							|| err.errno == errno.ERR_TRANSACTION_BLOCK_RANGE_LIMIT[0] // block limit
