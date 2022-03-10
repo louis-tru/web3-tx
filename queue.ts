@@ -139,19 +139,28 @@ export class TransactionQueue {
 					try {
 						if (opts) {
 							resolve(await exec(opts));
-						} else {
+						} else { // retry, wait nonce
 							queue.list.unshift(ctx); // retry queue
-
-							if (queue.list.length == 1) {
-								await utils.sleep(5e3); // sleep 5s
-							}
+							// if (queue.list.length == 1)
+							await utils.sleep(5e3); // sleep 5s
 						}
 					} catch(err) {
-						if (ctx.retry--) {
-							console.warn(err);
-							queue.list.push(ctx); // retry back
-						} else {
-							reject(err);
+						if (err.errno == errno.ERR_TRANSACTION_STATUS_FAIL[0] // fail
+							|| err.errno == errno.ERR_TRANSACTION_INVALID[0]    // invalid
+							|| err.errno == errno.ERR_TRANSACTION_BLOCK_RANGE_LIMIT[0] // block limit
+							|| err.errno == errno.ERR_REQUEST_TIMEOUT[0] // timeout
+							|| err.errno == errno.ERR_SOLIDITY_EXEC_ERROR[0] // exec 
+						) {
+							if (ctx.retry--) {
+								console.warn(err);
+								queue.list.push(ctx); // retry back
+							} else {
+								reject(err);
+							}
+						} else { // force retry
+							queue.list.unshift(ctx); // retry queue
+							if (queue.list.length == 1)
+								await utils.sleep(5e3); // sleep 5s
 						}
 					}
 				},
