@@ -36,7 +36,7 @@ import { Contract as __Contract, Options as ContractOptions, EventData } from 'w
 import {Transaction,TransactionReceipt } from 'web3-core';
 import { Eth } from 'web3-eth';
 import {AbiItem} from 'web3-utils';
-import { JsonRpcResponse } from 'web3-core-helpers';
+// import { JsonRpcResponse } from 'web3-core-helpers';
 import { MultipleProvider, Provider } from './provider';
 
 export * from './base';
@@ -58,31 +58,16 @@ export interface Signature {
 	recovery: number;
 }
 
-export interface IWeb3Tx {
-	readonly web3: base.Web3;
-	readonly eth: Eth;
-	gasPrice(): Promise<number>;
-	defaultAccount(): Promise<string>;
-	createContract(address: string, abi: any[]): Contract;
-	sendTransaction(tx: TxOptions): TransactionPromise;
-	sendSignTransaction(tx: TxOptions, cb?: SendCallback): TransactionPromise;
-	sendSignedTransaction(serializedTx: IBuffer, opts?: TxOptions, cb?: SendCallback): TransactionPromise;
-	getBlockNumber(): Promise<number>;
-	getNonce(account?: string): Promise<number>;
-	sign?(message: IBuffer, account?: string): Promise<Signature> | Signature;
-	signTx(opts?: TxOptions): Promise<SerializedTx>;
-}
-
 class TxSigner {
 	private _account: string;
-	private _host: IWeb3Tx;
-	constructor(host: IWeb3Tx, account: string) {
+	private _host: IWeb3;
+	constructor(host: IWeb3, account: string) {
 		this._host = host;
 		this._account = '0x' + crypto_tx.toChecksumAddress(buffer.from(account.slice(2), 'hex'));
 	}
 	async sign(message: IBuffer) {
 		if (!this._host.sign)
-			throw Error.new(errno.ERR_IWEB3Z_SIGN_NOT_IMPL);
+			throw Error.new(errno.ERR_IWEB3_SIGN_NOT_IMPL);
 		var signature = await this._host.sign(buffer.from(message), this._account);
 		return {
 			signature: Buffer.from(signature.signature),
@@ -91,7 +76,7 @@ class TxSigner {
 	}
 }
 
-async function setTx(self: IWeb3Tx, tx: TxOptions, estimateGas?: (tx: TxOptions)=>Promise<number>) {
+async function setTx(self: IWeb3, tx: TxOptions, estimateGas?: (tx: TxOptions)=>Promise<number>) {
 	estimateGas = estimateGas || ((tx: TxOptions)=>self.eth.estimateGas(tx));
 	tx.from = tx.from || await self.defaultAccount();
 	tx.nonce = tx.nonce || await self.eth.getTransactionCount(tx.from);
@@ -124,6 +109,21 @@ async function setTx(self: IWeb3Tx, tx: TxOptions, estimateGas?: (tx: TxOptions)
 	};
 }
 
+export interface IWeb3 {
+	readonly raw: base.Web3Raw;
+	readonly eth: Eth;
+	gasPrice(): Promise<number>;
+	defaultAccount(): Promise<string>;
+	createContract(address: string, abi: AbiItem[]): Contract;
+	sendTransaction(tx: TxOptions, cb?: SendCallback): TransactionPromise;
+	sendSignTransaction(tx: TxOptions, cb?: SendCallback): TransactionPromise;
+	sendSignedTransaction(serializedTx: IBuffer, opts?: TxOptions, cb?: SendCallback): TransactionPromise;
+	getBlockNumber(): Promise<number>;
+	getNonce(account?: string): Promise<number>;
+	sign?(message: IBuffer, account?: string): Promise<Signature> | Signature;
+	signTx(opts?: TxOptions): Promise<SerializedTx>;
+}
+
 export interface Contract extends ContractBase {
 	readonly methods: {
 		[method: string]: base.ContractMethod;
@@ -132,10 +132,10 @@ export interface Contract extends ContractBase {
 }
 
 export class Contract extends ContractBase {
-	private _host: Web3Tx;
+	private _host: IWeb3;
 	private __requestManager: any;
 
-	constructor(host: Web3Tx, jsonInterface: AbiItem[], address: string, options?: ContractOptions) {
+	constructor(host: IWeb3, jsonInterface: AbiItem[], address: string, options?: ContractOptions) {
 		super(jsonInterface, address, options);
 		this._host = host;
 		this._Init(jsonInterface, address);
@@ -147,7 +147,7 @@ export class Contract extends ContractBase {
 	}
 	
 	private get _requestManager() {
-		return this._host ? (this._host.web3 as any)._requestManager: this.__requestManager;
+		return this._host ? (this._host.raw as any)._requestManager: this.__requestManager;
 	}
 
 	private set _provider(v:any) {}
@@ -272,10 +272,8 @@ export class Contract extends ContractBase {
 
 }
 
-
-export class Web3Tx implements IWeb3Tx {
-	private _web3?: base.Web3;
-	private _SendId = utils.getId();
+export class Web3 implements IWeb3 {
+	private _raw?: base.Web3Raw;
 	private _provider?: MultipleProvider;
 
 	TRANSACTION_CHECK_TIME = base.TRANSACTION_CHECK_TIME;
@@ -294,21 +292,21 @@ export class Web3Tx implements IWeb3Tx {
 	setProvider(provider: Provider | Provider[]) {
 		this._provider = Array.isArray(provider) || typeof provider == 'string' ?
 			new MultipleProvider(provider): provider as MultipleProvider;
-		if (this._web3) {
-			this._web3.setProvider(this._provider as any);
+		if (this._raw) {
+			this._raw.setProvider(this._provider as any);
 		}
 	}
 
-	get web3() {
-		if (!this._web3) {
-			this._web3 = new base.Web3( this.provider as any );
-			(this._web3.eth as any).Contract = {};
+	get raw() {
+		if (!this._raw) {
+			this._raw = new base.Web3Raw( this.provider as any );
+			(this._raw.eth as any).Contract = {};
 		}
-		return this._web3 as base.Web3;
+		return this._raw as base.Web3Raw;
 	}
 
 	async defaultAccount() {
-		return this.web3.defaultAccount || (await this.eth.getAccounts())[0] || '';
+		return this.raw.defaultAccount || (await this.eth.getAccounts())[0] || '';
 	}
 
 	async gasPrice() {
@@ -316,15 +314,15 @@ export class Web3Tx implements IWeb3Tx {
 	}
 
 	get eth() {
-		return this.web3.eth;
+		return this.raw.eth;
 	}
 
 	get utils() {
-		return this.web3.utils;
+		return this.raw.utils;
 	}
 
 	get version() {
-		return this.web3.version;
+		return this.raw.version;
 	}
 
 	private _watchList: Map<string, {
@@ -457,30 +455,14 @@ export class Web3Tx implements IWeb3Tx {
 		}
 	}
 
-	async sendRpc(method: string, params: any[]) {
-		var send = (this.eth.currentProvider as any).send as base.RpcSend;
-		utils.assert(send, 'currentProvider.send() cannot be empty');
-
-		return new Promise<any>((resolve, reject)=>{
-			send.call(this.web3.currentProvider, {
-				id: this._SendId++, jsonrpc: '2.0', method, params
-			}, (error?: Error, result?: JsonRpcResponse)=>{
-				if (error) {
-					reject(Error.new(error));
-				} else if (result) {
-					if (result.error) {
-						reject(Error.new(result.error));
-					} else {
-						resolve(result.result);
-					}
-				} else {
-					reject(Error.new('JsonRpcResponse be empty'));
-				}
-			});
-		});
+	/**
+	 * @func request() rpc
+	*/
+	request(method: string, params?: any[]) {
+		return this.provider.request({ method, params });
 	}
 
-	createContract(contractAddress: string, abi: AbiItem[]) {
+	createContract(contractAddress: string, abi: AbiItem[]): Contract {
 		return new Contract(this, abi, contractAddress);
 	}
 
@@ -514,7 +496,7 @@ export class Web3Tx implements IWeb3Tx {
 	}
 
 	sendRawTransaction(tx: IBuffer): Promise<string> {
-		return this.sendRpc('eth_sendRawTransaction', ['0x' + tx.toString('hex')]);
+		return this.request('eth_sendRawTransaction', ['0x' + tx.toString('hex')]);
 	}
 
 	/**
@@ -522,7 +504,7 @@ export class Web3Tx implements IWeb3Tx {
 	 */
 	async sendTransaction(tx: TxOptions, cb?: SendCallback): TransactionPromise {
 		var tx_ = await setTx(this, tx);
-		var txid = await this.sendRpc('eth_sendTransaction', [tx_]);
+		var txid = await this.request('eth_sendTransaction', [tx_]);
 		if (cb)
 			await cb(txid, tx);
 		return this._checkTransaction(txid, tx);

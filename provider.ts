@@ -32,7 +32,7 @@ import utils from 'somes';
 import * as net from 'net';
 import {RequestArguments } from 'web3-core';
 import { JsonRpcPayload, JsonRpcResponse } from 'web3-core-helpers';
-import {SAFE_TRANSACTION_MAX_TIMEOUT, Web3, RpcCallback} from './base';
+import {SAFE_TRANSACTION_MAX_TIMEOUT, Web3Raw, RpcCallback} from './base';
 
 export interface BaseProvider {
 	readonly rpc: string;
@@ -55,7 +55,7 @@ export class MultipleProvider implements BaseProvider {
 	constructor(provider: Provider | Provider[], priority?: number[], mode?: MPSwitchMode) {
 		var _priority = priority || [];
 		this._BaseProvider = (Array.isArray(provider) ? provider : [provider]).map((provider: any, j)=>{
-			var { HttpProvider, WebsocketProvider, IpcProvider } = Web3.providers;
+			var { HttpProvider, WebsocketProvider, IpcProvider } = Web3Raw.providers;
 			var baseProvider: BaseProvider = provider;
 
 			if (typeof provider == 'string') {
@@ -161,14 +161,16 @@ export class MultipleProvider implements BaseProvider {
 		};
 		return new Promise<T>((resolve, reject) => {
 			this.send(payload, (error?: Error, result?: JsonRpcResponse) => {
-				if (result) {
+				if (error) {
+					reject(Error.new(error).ext({ httpErr: true }));
+				} else if (result) {
 					if (result.error) {
 						reject(Error.new(result.error));
 					} else {
 						resolve(result.result);
 					}
 				} else {
-					reject(Error.new(error as Error).ext({ httpErr: true }));
+					reject(Error.new('JsonRpcResponse be empty'));
 				}
 			});
 		});

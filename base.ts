@@ -40,7 +40,7 @@ import {IBuffer} from 'somes/buffer';
 import './_fix_contract';
 import './_fix_web3';
 
-class ContractBase extends (require('web3-eth-contract') as typeof __Contract) {};
+// class ContractBase extends (require('web3-eth-contract') as typeof __Contract) {};
 
 export const SAFE_TRANSACTION_MAX_TIMEOUT = 300 * 1e3;  // 300秒
 export const TRANSACTION_MAX_BLOCK_RANGE = 32;
@@ -51,11 +51,11 @@ export type RpcCallback = (error?: Error, result?: JsonRpcResponse) => void;
 
 export type RpcSend = (payload: JsonRpcPayload, callback: RpcCallback) => void;
 
-export class Web3 extends (require('web3') as typeof __Web3) {};
+export class Web3Raw extends (require('web3') as typeof __Web3) {};
 
 export { ContractOptions, EventData, Transaction, TransactionReceipt, Block, CallOptions, SendOptions };
 
-export const providers = base.Web3.providers;
+export const providers = base.Web3Raw.providers;
 
 export interface FindEventResult {
 	events: EventData[];
