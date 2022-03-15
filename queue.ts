@@ -29,7 +29,7 @@
  * ***** END LICENSE BLOCK ***** */
 
 import utils from 'somes';
-import {IWeb3Z} from './index';
+import {IWeb3Tx} from './index';
 import {List} from 'somes/event';
 import errno from './errno';
 
@@ -64,11 +64,11 @@ interface Queue { list: List<queue_context>; running: boolean; }
 
 export class TransactionQueue {
 
-	private _host: IWeb3Z;
+	private _host: IWeb3Tx;
 	private _tx_queues: Dict<Queue> = {};
 	private _tx_nonceObjs: Dict<Dict<DeOptions>> = {};
 
-	constructor(web3: IWeb3Z) {
+	constructor(web3: IWeb3Tx) {
 		this._host = web3;
 	}
 

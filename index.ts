@@ -31,100 +31,35 @@
 import utils from 'somes';
 import buffer, {IBuffer} from 'somes/buffer';
 import errno from './errno';
-import './_fix_contract';
-import __Web3 from 'web3';
-import * as net from 'net';
-import {Contract as __Contract, Options as ContractOptions, 
-	EventData, CallOptions, SendOptions, ContractSendMethod as ContractSendMethodRaw } from 'web3-eth-contract';
-import {Transaction,TransactionReceipt,provider,PromiEvent } from 'web3-core';
-import {BlockTransactionString as Block} from 'web3-eth';
+import * as base from './base';
+import { Contract as __Contract, Options as ContractOptions, EventData } from 'web3-eth-contract';
+import {Transaction,TransactionReceipt } from 'web3-core';
 import { Eth } from 'web3-eth';
 import {AbiItem} from 'web3-utils';
-import { JsonRpcPayload, JsonRpcResponse } from 'web3-core-helpers';
+import { JsonRpcResponse } from 'web3-core-helpers';
+import { MultipleProvider, Provider } from './provider';
 
-import './_fix_web3';
-import util from 'somes';
-
-type RpcCallback = (error?: Error, result?: JsonRpcResponse) => void;
-
-interface RpcSend {
-	(
-		payload: JsonRpcPayload,
-		callback: RpcCallback
-	): void;
-}
-
-class ContractBase extends (require('web3-eth-contract') as typeof __Contract) {};
+export * from './base';
+export * from './provider';
 
 const requestManager = require('web3-core-requestmanager');
 const crypto_tx = require('crypto-tx');
 
-export class Web3 extends (require('web3') as typeof __Web3) {};
+class ContractBase extends (require('web3-eth-contract') as typeof __Contract) {};
 
-export { ContractOptions, EventData, Transaction, TransactionReceipt, Block, CallOptions, SendOptions };
-
-export const providers = Web3.providers;
-
-export const SAFE_TRANSACTION_MAX_TIMEOUT = 300 * 1e3;  // 300秒
-export const TRANSACTION_MAX_BLOCK_RANGE = 32;
-export const TRANSACTION_CHECK_TIME = 1e4; // 10秒
-export const DEFAULT_GAS_PRICE = 1e5; // default gas price
-
-export interface FindEventResult {
-	events: EventData[];
-	transaction: Transaction;
-	transactionReceipt: TransactionReceipt;
-}
-
-export interface TxOptions extends Dict {
-	chainId?: number;
-	from?: string;
-	nonce?: number;
-	to?: string;
-	gas?: number;
-	gasLimit?: number;
-	gasPrice?: number;
-	value?: number| string;
-	data?: string;
-	timeout?: number; // ext
-	blockRange?: number; // ext
-}
-
-export type SendCallback = (hash: string, opts: TxOptions) => any;
-export type TransactionPromise = Promise<TransactionReceipt>;
-
-export interface ContractSendMethod extends ContractSendMethodRaw {
-	/**
-	 * returns serializedTx
-	 */
-	signTx(opts?: TxOptions): Promise<SerializedTx>;
-	post(opts?: TxOptions, cb?: SendCallback): TransactionPromise;
-	sendRaw(opts?: TxOptions, cb?: SendCallback): TransactionPromise;
-}
-
-export interface ContractMethod {
-	<A extends any[]>(...args: A): ContractSendMethod;
-}
-
-export interface Contract extends ContractBase {
-	readonly methods: {
-		[method: string]: ContractMethod;
-	};
-	findEvent(event: string, transactionHash: string, blockNumber?: number): Promise<FindEventResult | null>;
-}
+// type FindEventResult = base.FindEventResult;
+type TxOptions = base.TxOptions;
+type SendCallback = base.SendCallback;
+type TransactionPromise = base.TransactionPromise;
+type SerializedTx = base.SerializedTx;
 
 export interface Signature {
 	signature: IBuffer;
 	recovery: number;
 }
 
-export interface SerializedTx {
-	data: IBuffer;
-	hash: IBuffer;
-}
-
-export interface IWeb3Z {
-	readonly web3: Web3;
+export interface IWeb3Tx {
+	readonly web3: base.Web3;
 	readonly eth: Eth;
 	gasPrice(): Promise<number>;
 	defaultAccount(): Promise<string>;
@@ -140,8 +75,8 @@ export interface IWeb3Z {
 
 class TxSigner {
 	private _account: string;
-	private _host: IWeb3Z;
-	constructor(host: IWeb3Z, account: string) {
+	private _host: IWeb3Tx;
+	constructor(host: IWeb3Tx, account: string) {
 		this._host = host;
 		this._account = '0x' + crypto_tx.toChecksumAddress(buffer.from(account.slice(2), 'hex'));
 	}
@@ -156,7 +91,7 @@ class TxSigner {
 	}
 }
 
-async function setTx(self: Web3Z, tx: TxOptions, estimateGas?: (tx: TxOptions)=>Promise<number>) {
+async function setTx(self: IWeb3Tx, tx: TxOptions, estimateGas?: (tx: TxOptions)=>Promise<number>) {
 	estimateGas = estimateGas || ((tx: TxOptions)=>self.eth.estimateGas(tx));
 	tx.from = tx.from || await self.defaultAccount();
 	tx.nonce = tx.nonce || await self.eth.getTransactionCount(tx.from);
@@ -174,7 +109,7 @@ async function setTx(self: Web3Z, tx: TxOptions, estimateGas?: (tx: TxOptions)=>
 		tx.gasLimit = parseInt(String(tx.gas * 1.2)); // suggested gas limit
 
 	if (!tx.gasPrice) // 程序运行单步的wei数量wei default
-		tx.gasPrice = await self.gasPrice() || DEFAULT_GAS_PRICE;
+		tx.gasPrice = await self.gasPrice() || base.DEFAULT_GAS_PRICE;
 
 	return {
 		from: tx.from,
@@ -190,10 +125,10 @@ async function setTx(self: Web3Z, tx: TxOptions, estimateGas?: (tx: TxOptions)=>
 }
 
 export class Contract extends ContractBase {
-	private _host: Web3Z;
+	private _host: Web3Tx;
 	private __requestManager: any;
 
-	constructor(host: Web3Z, jsonInterface: AbiItem[], address: string, options?: ContractOptions) {
+	constructor(host: Web3Tx, jsonInterface: AbiItem[], address: string, options?: ContractOptions) {
 		super(jsonInterface, address, options);
 		this._host = host;
 		this._Init(jsonInterface, address);
@@ -226,7 +161,7 @@ export class Contract extends ContractBase {
 	private _Init(jsonInterface: AbiItem[], address: string) {
 		var self = this;
 
-		async function signTx(method: ContractSendMethod, opts?: TxOptions) {
+		async function signTx(method: base.ContractSendMethod, opts?: TxOptions) {
 			var _opts = Object.assign(opts, {
 				to: address,
 				data: method.encodeABI(),
@@ -241,7 +176,7 @@ export class Contract extends ContractBase {
 				var { methods } = self;
 				var raw = methods[name];
 				methods[name] = (...args: any[])=>{
-					var method = raw.call(methods, ...args) as ContractSendMethod;
+					var method = raw.call(methods, ...args) as base.ContractSendMethod;
 					var call = method.call;
 					method.signTx = e=>signTx(method, e);
 					method.post = async (e, cb)=>{
@@ -330,53 +265,39 @@ export class Contract extends ContractBase {
 
 }
 
-export class Web3Z implements IWeb3Z {
-	// private _gasPrice = DEFAULT_GAS_PRICE;
-	private _web3?: Web3;
-	private _SendId = util.getId();
 
-	TRANSACTION_CHECK_TIME = TRANSACTION_CHECK_TIME;
+export class Web3Tx implements IWeb3Tx {
+	private _web3?: base.Web3;
+	private _SendId = utils.getId();
+	private _provider?: MultipleProvider;
 
-	private getProviderFrom(provider: provider) {
+	TRANSACTION_CHECK_TIME = base.TRANSACTION_CHECK_TIME;
 
-		var { HttpProvider, WebsocketProvider, IpcProvider } = Web3.providers;
-		if (typeof provider == 'string') {
-			if (/^https?:/.test(provider)) { // http
-				provider = new HttpProvider(provider, { timeout: SAFE_TRANSACTION_MAX_TIMEOUT });
-			} else if (/^wss?:/.test(provider)) { // web socket
-				provider = new WebsocketProvider(provider, { timeout: SAFE_TRANSACTION_MAX_TIMEOUT });
-			} else if (/^[\\/]/.test(provider)) { // ipc
-				provider = new IpcProvider(provider, net);
-			} else {
-				throw Error(`Can't create 'Web3 provider`);
-			}
-		}
-		return provider;
-	}
-
-	givenProvider(): provider {
+	defaultProvider(): Provider | Provider[] {
 		return 'http://127.0.0.1:8545';
 	}
 
 	get provider() {
-		return this.web3.currentProvider;
+		if (!this._provider) {
+			this.setProvider(this.defaultProvider());
+		}
+		return this._provider as MultipleProvider;
 	}
 
-	set provider(provider: provider) {
-		if (!this._web3) {
-			this._web3 = new Web3(this.getProviderFrom(provider));
-			(this._web3.eth as any).Contract = {}; // cause memory overflow error
-		} else {
-			this._web3.setProvider(this.getProviderFrom(provider));
+	setProvider(provider: Provider | Provider[]) {
+		this._provider = Array.isArray(provider) || typeof provider == 'string' ?
+			new MultipleProvider(provider): provider as MultipleProvider;
+		if (this._web3) {
+			this._web3.setProvider(this._provider as any);
 		}
 	}
 
 	get web3() {
 		if (!this._web3) {
-			this._web3 = new Web3(this.getProviderFrom(this.givenProvider()));
+			this._web3 = new base.Web3( this.provider as any );
 			(this._web3.eth as any).Contract = {};
 		}
-		return this._web3 as Web3;
+		return this._web3 as base.Web3;
 	}
 
 	async defaultAccount() {
@@ -412,15 +333,15 @@ export class Web3Z implements IWeb3Z {
 	private _watching = false;
 
 	private async _checkTransaction(txid: string, opts?: TxOptions) {
-		return util.promise<any>(async (resolve, reject)=>{
+		return utils.promise<any>(async (resolve, reject)=>{
 			utils.assert(txid, 'Bad argument. txid cannot empty');
 			opts = opts || {};
 			var blockNumber = 0;
 			try {
 				blockNumber = await this.getBlockNumber();
 			} catch(err) {}
-			var timeout = (Number(opts.timeout) || SAFE_TRANSACTION_MAX_TIMEOUT) + Date.now();
-			var blockRange = Number(opts.blockRange) || TRANSACTION_MAX_BLOCK_RANGE;
+			var timeout = (Number(opts.timeout) || base.SAFE_TRANSACTION_MAX_TIMEOUT) + Date.now();
+			var blockRange = Number(opts.blockRange) || base.TRANSACTION_MAX_BLOCK_RANGE;
 			var id = utils.getId();
 			console.log('send signed Transaction', id, txid);
 			this._watchList.set(txid, {id, opts: opts || {}, resolve, reject, timeout, blockNumber, blockRange, noneConfirm: 0});
@@ -456,7 +377,7 @@ export class Web3Z implements IWeb3Z {
 
 		for (var [txid,tx] of this._watchList) {
 			try {
-				var receipt = await util.timeout(this.checkTransaction(txid), 1e4);
+				var receipt = await utils.timeout(this.checkTransaction(txid), 1e4);
 
 				if (receipt) {
 					if (receipt.status) {
@@ -530,8 +451,8 @@ export class Web3Z implements IWeb3Z {
 	}
 
 	async sendRpc(method: string, params: any[]) {
-		var send = (this.eth.currentProvider as any).send as RpcSend;
-		util.assert(send, 'currentProvider.send() cannot be empty');
+		var send = (this.eth.currentProvider as any).send as base.RpcSend;
+		utils.assert(send, 'currentProvider.send() cannot be empty');
 
 		return new Promise<any>((resolve, reject)=>{
 			send.call(this.web3.currentProvider, {
