@@ -34,6 +34,8 @@ import {RequestArguments } from 'web3-core';
 import { JsonRpcPayload, JsonRpcResponse } from 'web3-core-helpers';
 import {SAFE_TRANSACTION_MAX_TIMEOUT, Web3Raw, RpcCallback} from './base';
 
+export { JsonRpcPayload, JsonRpcResponse };
+
 export interface BaseProvider {
 	readonly rpc: string;
 	send(payload: JsonRpcPayload, callback: RpcCallback): void;
@@ -51,6 +53,8 @@ export class MultipleProvider implements BaseProvider {
 	private _BaseProvider: { provider: BaseProvider, priority: number }[];
 	private _switchMode: MPSwitchMode;
 	private _providerIndex = 0;
+
+	printLog = false;
 
 	constructor(provider: Provider | Provider[], priority?: number[], mode?: MPSwitchMode) {
 		var _priority = priority || [];
@@ -149,7 +153,28 @@ export class MultipleProvider implements BaseProvider {
 	}
 
 	send(payload: JsonRpcPayload, callback: RpcCallback): void {
-		this.baseProvider.send(payload, callback);
+		var provider = this.baseProvider;
+		var rpc = provider.rpc;
+		if (this.printLog)
+			console.log('send rpc =>', provider.rpc, payload);
+		provider.send(payload, (error?: Error, result?: JsonRpcResponse)=>{
+			if (error) {
+				callback(Error.new(error).ext({ httpErr: true }));
+			} else if (result) {
+				this.onResult(result, rpc);
+				if (result.error) {
+					callback(Error.new(result.error));
+				} else {
+					callback(undefined, result);
+				}
+			} else {
+				callback(Error.new('JsonRpcResponse be empty'));
+			}
+		});
+	}
+
+	onResult(res: JsonRpcResponse, rpc: string) {
+		// child impl
 	}
 
 	request<T = any>(args: RequestArguments): Promise<T> {
@@ -161,16 +186,10 @@ export class MultipleProvider implements BaseProvider {
 		};
 		return new Promise<T>((resolve, reject) => {
 			this.send(payload, (error?: Error, result?: JsonRpcResponse) => {
-				if (error) {
-					reject(Error.new(error).ext({ httpErr: true }));
-				} else if (result) {
-					if (result.error) {
-						reject(Error.new(result.error));
-					} else {
-						resolve(result.result);
-					}
+				if (result) {
+					result.error ? reject(result.error): resolve(result.result);
 				} else {
-					reject(Error.new('JsonRpcResponse be empty'));
+					reject(error);
 				}
 			});
 		});
