@@ -97,10 +97,3 @@ export interface ContractSendMethod extends ContractSendMethodRaw {
 export interface ContractMethod {
 	<A extends any[]>(...args: A): ContractSendMethod;
 }
-
-export interface Contract extends ContractBase {
-	readonly methods: {
-		[method: string]: ContractMethod;
-	};
-	findEvent(event: string, transactionHash: string, blockNumber?: number): Promise<FindEventResult | null>;
-}

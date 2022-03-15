@@ -144,12 +144,12 @@ export class TransactionQueue {
 							// if (queue.list.length == 1)
 							await utils.sleep(5e3); // sleep 5s
 						}
-					} catch(err:any) {
-						if (err.errno == errno.ERR_TRANSACTION_STATUS_FAIL[0] // fail
+					} catch(err: any) {
+						if ( err.errno == errno.ERR_TRANSACTION_STATUS_FAIL[0] // fail
 							|| err.errno == errno.ERR_TRANSACTION_INVALID[0]    // invalid
+							|| err.errno == errno.ERR_SOLIDITY_EXEC_ERROR[0] // exec 
 							|| err.errno == errno.ERR_TRANSACTION_BLOCK_RANGE_LIMIT[0] // block limit
 							|| err.errno == errno.ERR_REQUEST_TIMEOUT[0] // timeout
-							|| err.errno == errno.ERR_SOLIDITY_EXEC_ERROR[0] // exec 
 						) {
 							if (ctx.retry--) {
 								console.warn(err);
@@ -158,6 +158,8 @@ export class TransactionQueue {
 								reject(err);
 							}
 						} else { // force retry
+							opts = opts as DeOptions;
+							console.warn('TransactionQueue#push#dequeue ************* web3 tx fail *************', opts, err);
 							queue.list.unshift(ctx); // retry queue
 							if (queue.list.length == 1)
 								await utils.sleep(5e3); // sleep 5s

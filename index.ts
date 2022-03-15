@@ -124,6 +124,13 @@ async function setTx(self: IWeb3Tx, tx: TxOptions, estimateGas?: (tx: TxOptions)
 	};
 }
 
+export interface Contract extends ContractBase {
+	readonly methods: {
+		[method: string]: base.ContractMethod;
+	};
+	findEvent(event: string, transactionHash: string, blockNumber?: number): Promise<base.FindEventResult | null>;
+}
+
 export class Contract extends ContractBase {
 	private _host: Web3Tx;
 	private __requestManager: any;
