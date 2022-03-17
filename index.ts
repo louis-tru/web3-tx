@@ -91,7 +91,7 @@ async function setTx(self: IWeb3, tx: TxOptions, estimateGas?: (tx: TxOptions)=>
 				nonce: '0x' + tx.nonce.toString(16),
 			} as any);
 		} catch(err: any) {
-			if (err.message.indexOf('insufficient funds') != -1)
+			if (err.message && err.message.toLowerCase().indexOf('insufficient funds') != -1)
 				throw Error.new(errno.ERR_INSUFFICIENT_FUNDS_FOR_TX);
 			throw err;
 		}
@@ -210,7 +210,7 @@ export class Contract extends ContractBase {
 						try {
 							return await call.call(this, {from, gasPrice, gas}, ...args);
 						} catch(err: any) {
-							if (err.message.indexOf('execution reverted') != -1) {
+							if (err.message && err.message.toLowerCase().indexOf('execution reverted') != -1) {
 								throw Error.new(errno.ERR_SOLIDITY_EXEC_ERROR);
 							}
 							throw err;
@@ -516,7 +516,7 @@ export class Web3 implements IWeb3 {
 		try {
 			var txid = await this.request('eth_sendRawTransaction', ['0x' + tx.toString('hex')]);
 		} catch(err: any) {
-			if (err.message.indexOf('insufficient funds') != -1)
+			if (err.message && err.message.toLowerCase().indexOf('insufficient funds') != -1)
 				throw Error.new(errno.ERR_INSUFFICIENT_FUNDS_FOR_TX);
 			throw err;
 		}
