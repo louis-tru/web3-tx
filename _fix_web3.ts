@@ -7,7 +7,7 @@ import 'somes';
 import errno from './errno';
 
 function ConnectionTimeout() {
-	return Error.new(errno.ERR_REQUEST_TIMEOUT);
+	return Error.new(errno.ERR_RPC_REQUEST_TIMEOUT);
 }
 
 function InvalidResponse(result: any) {
@@ -23,7 +23,7 @@ function ErrorResponse(result: any) {
 	var err = result.error ? result.error: result;
 	err.errno = err.code || -30000;
 	if (err.errno == -32065) { // timeout
-		err.errno = errno.ERR_REQUEST_TIMEOUT[0];
+		err.errno = errno.ERR_RPC_REQUEST_TIMEOUT[0];
 		return Error.new(err);
 	} else {
 		return Error.new(err);

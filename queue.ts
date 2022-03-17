@@ -115,35 +115,38 @@ export class MemoryTransactionQueue {
 				retry,
 				options,
 				dequeue: async (opts: DeOptions | null)=>{
-					try {
-						if (opts) {
-							resolve(await exec(opts));
-						} else { // retry, wait nonce
-							queue.list.unshift(item); // retry queue
-							await utils.sleep(1e4); // sleep 10s
-						}
-					} catch(err: any) {
-						if ( err.errno == errno.ERR_TRANSACTION_STATUS_FAIL[0] // fail
-							|| err.errno == errno.ERR_TRANSACTION_INVALID[0]    // invalid
-							|| err.errno == errno.ERR_SOLIDITY_EXEC_ERROR[0] // exec 
-							|| err.errno == errno.ERR_TRANSACTION_BLOCK_RANGE_LIMIT[0] // block limit
-							|| err.errno == errno.ERR_REQUEST_TIMEOUT[0] // timeout
-							|| err.errno == errno.ERR_INSUFFICIENT_FUNDS_FOR_TX[0] // insufficient funds for transaction
-						) {
-							if (item.retry--) {
-								console.warn(err);
-								queue.list.push(item); // retry back
-							} else {
-								reject(err);
+					do {
+						var forceRetry = false;
+						try {
+							if (opts) {
+								resolve(await exec(opts));
+							} else { // retry, wait nonce
+								queue.list.unshift(item); // retry queue
+								await utils.sleep(1e4); // sleep 10s
 							}
-						} else { // force retry
-							opts = opts as DeOptions;
-							console.warn('TransactionQueue#push#dequeue ************* web3 tx fail *************', opts, err);
-							queue.list.unshift(item); // retry queue
-							if (queue.list.length == 1)
+						} catch(err: any) {
+							if (/*!err.httpErr && (*/
+									 err.errno == errno.ERR_TRANSACTION_STATUS_FAIL[0] // fail
+								|| err.errno == errno.ERR_TRANSACTION_INVALID[0]    // invalid
+								|| err.errno == errno.ERR_EXECUTION_REVERTED[0] // exec 
+								|| err.errno == errno.ERR_SOLIDITY_EXEC_ERROR[0] // exec 
+								|| err.errno == errno.ERR_INSUFFICIENT_FUNDS_FOR_TX[0] // insufficient funds for transaction
+								|| err.errno == errno.ERR_TRANSACTION_BLOCK_RANGE_LIMIT[0] // block limit
+								|| err.errno == errno.ERR_TRANSACTION_TIMEOUT[0] // timeout
+							/*)*/) {
+								if (item.retry--) {
+									console.warn(err);
+									queue.list.push(item); // retry back
+								} else {
+									reject(err);
+								}
+							} else { // force retry
+								console.warn('TransactionQueue_push_dequeue, web3 tx fail force retry *********', opts, err);
+								forceRetry = true;
 								await utils.sleep(5e3); // sleep 5s
+							}
 						}
-					}
+					} while(forceRetry);
 				},
 			};
 

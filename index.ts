@@ -211,7 +211,10 @@ export class Contract extends ContractBase {
 							return await call.call(this, {from, gasPrice, gas}, ...args);
 						} catch(err: any) {
 							if (err.message && err.message.toLowerCase().indexOf('execution reverted') != -1) {
-								throw Error.new(errno.ERR_SOLIDITY_EXEC_ERROR);
+								// throw Error.new(errno.ERR_SOLIDITY_EXEC_ERROR);
+								err.errno = errno.ERR_EXECUTION_REVERTED[0];
+							} else if (!err.httpErr) { //
+								err.errno = errno.ERR_SOLIDITY_EXEC_ERROR[0];
 							}
 							throw err;
 						}
@@ -411,7 +414,7 @@ export class Web3 implements IWeb3 {
 				}
 
 				else if (tx.timeout < Date.now()) { // check timeout
-					error( txid, tx.id, Error.new(errno.ERR_REQUEST_TIMEOUT) );
+					error( txid, tx.id, Error.new(errno.ERR_TRANSACTION_TIMEOUT) );
 				}
 				else {
 
@@ -517,7 +520,7 @@ export class Web3 implements IWeb3 {
 			var txid = await this.request('eth_sendRawTransaction', ['0x' + tx.toString('hex')]);
 		} catch(err: any) {
 			if (err.message && err.message.toLowerCase().indexOf('insufficient funds') != -1)
-				throw Error.new(errno.ERR_INSUFFICIENT_FUNDS_FOR_TX);
+				err.errno == errno.ERR_INSUFFICIENT_FUNDS_FOR_TX[0];
 			throw err;
 		}
 		return txid;
