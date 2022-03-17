@@ -11,6 +11,7 @@ export class ErrnoList extends BaseErrnoList {
 	ERR_TRANSACTION_INVALID: ErrnoCode = [100258, 'ERR_TRANSACTION_INVALID']
 	ERR_TRANSACTION_BLOCK_RANGE_LIMIT: ErrnoCode = [100259, 'ERR_ETH_TRANSACTION_BLOCK_RANGE_LIMIT']
 	ERR_SOLIDITY_EXEC_ERROR: ErrnoCode = [100260, 'ERR_SOLIDITY_EXEC_ERROR']
+	ERR_INSUFFICIENT_FUNDS_FOR_TX: ErrnoCode = [100260, 'insufficient funds for transaction']
 };
 
 export default new ErrnoList();

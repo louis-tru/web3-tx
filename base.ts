@@ -42,10 +42,12 @@ import './_fix_web3';
 
 // class ContractBase extends (require('web3-eth-contract') as typeof __Contract) {};
 
-export const SAFE_TRANSACTION_MAX_TIMEOUT = 300 * 1e3;  // 300秒
-export const TRANSACTION_MAX_BLOCK_RANGE = 32;
-export const TRANSACTION_CHECK_TIME = 1e4; // 10秒
 export const DEFAULT_GAS_PRICE = 1e5; // default gas price
+export const TRANSACTION_TIMEOUT = 300 * 1e3;  // 300秒
+export const TRANSACTION_BLOCK_RANGE_LIMIT = 64;
+export const TRANSACTION_CHECK_TIME = 1e4; // 10秒
+export const TRANSACTION_NONCE_TIMEOUT = 300 * 1e3;  // 300秒
+export const TRANSACTION_REQUEST_TIMEOUT = 300 * 1e3;  // 300秒
 
 export type RpcCallback = (error?: Error, result?: JsonRpcResponse) => void;
 

@@ -5,7 +5,7 @@
 
  import somes from 'somes';
  import {IWeb3, TransactionPromise, TransactionReceipt, EventData} from './index';
- import {TransactionQueue} from './queue';
+ import {MemoryTransactionQueue} from './queue';
  import {AbiItem, AbiOutput} from 'web3-utils/types';
  import { Contract, ContractSendMethod } from './index';
  
@@ -44,11 +44,11 @@
 	 private _apis?: T;
 	 private _info: SolidityInfo;
 	 private _web3: IWeb3;
-	 private _queue?: TransactionQueue;
+	 private _queue?: MemoryTransactionQueue;
  
-	 constructor(info: SolidityInfo, web3: IWeb3 | TransactionQueue) {
+	 constructor(info: SolidityInfo, web3: IWeb3 | MemoryTransactionQueue) {
 		 this._info = info;
-		 if (web3 instanceof TransactionQueue) {
+		 if (web3 instanceof MemoryTransactionQueue) {
 			 this._web3 = web3.host;
 			 this._queue = web3;
 		 } else {
@@ -226,11 +226,11 @@
 		 }
 	 }
  
-	 static instance<T>(info: SolidityInfo, web3: IWeb3 | TransactionQueue, name?: string): HappyContract<T> {
+	 static instance<T>(info: SolidityInfo, web3: IWeb3 | MemoryTransactionQueue, name?: string): HappyContract<T> {
 		 var contractName = name || info.contractName;
 		 if (!this._contracts[contractName])
 			 this._contracts[contractName] = new HappyContract<T>(info, web3);
 		 return this._contracts[contractName];
 	 }
- 
- }
+
+}

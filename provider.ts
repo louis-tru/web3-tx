@@ -32,7 +32,7 @@ import utils from 'somes';
 import * as net from 'net';
 import {RequestArguments } from 'web3-core';
 import { JsonRpcPayload, JsonRpcResponse } from 'web3-core-helpers';
-import {SAFE_TRANSACTION_MAX_TIMEOUT, Web3Raw, RpcCallback} from './base';
+import {TRANSACTION_REQUEST_TIMEOUT, Web3Raw, RpcCallback} from './base';
 
 export { JsonRpcPayload, JsonRpcResponse };
 
@@ -76,9 +76,9 @@ export class MultipleProvider implements BaseProvider {
 				}
 
 				if (/^https?:/.test(provider)) { // http
-					baseProvider = new HttpProvider(provider, { timeout: SAFE_TRANSACTION_MAX_TIMEOUT }) as any;
+					baseProvider = new HttpProvider(provider, { timeout: TRANSACTION_REQUEST_TIMEOUT }) as any;
 				} else if (/^wss?:/.test(provider)) { // web socket
-					baseProvider = new WebsocketProvider(provider, { timeout: SAFE_TRANSACTION_MAX_TIMEOUT }) as any;
+					baseProvider = new WebsocketProvider(provider, { timeout: TRANSACTION_REQUEST_TIMEOUT }) as any;
 				} else if (/^[\\/]/.test(provider)) { // ipc
 					baseProvider = new IpcProvider(provider, net) as any;
 				} else {

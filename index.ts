@@ -85,10 +85,16 @@ async function setTx(self: IWeb3, tx: TxOptions, estimateGas?: (tx: TxOptions)=>
 	tx.data = tx.data || '0x';
 
 	if (!tx.gas)
-		tx.gas = await estimateGas({...tx,
-			chainId: '0x' + tx.chainId.toString(16),
-			nonce: '0x' + tx.nonce.toString(16),
-		} as any);
+		try {
+			tx.gas = await estimateGas({...tx,
+				chainId: '0x' + tx.chainId.toString(16),
+				nonce: '0x' + tx.nonce.toString(16),
+			} as any);
+		} catch(err: any) {
+			if (err.message.indexOf('insufficient funds') != -1)
+				throw Error.new(errno.ERR_INSUFFICIENT_FUNDS_FOR_TX);
+			throw err;
+		}
 
 	if (!tx.gasLimit) // 程序运行时步数限制 default
 		tx.gasLimit = parseInt(String(tx.gas * 1.2)); // suggested gas limit
@@ -182,6 +188,7 @@ export class Contract extends ContractBase {
 			if (name && type == 'function') {
 				var { methods } = self;
 				var raw = methods[name];
+
 				methods[name] = (...args: any[])=>{
 					var method = raw.call(methods, ...args) as base.ContractSendMethod;
 					var call = method.call;
@@ -191,14 +198,23 @@ export class Contract extends ContractBase {
 						var tx = await signTx(method, opts);
 						return await self._host.sendSignedTransaction(tx.data, opts, cb);
 					};
+
 					method.sendRaw = async (e,cb)=>{
 						var opts = e || {};
 						await setTx(self._host, opts, (tx)=>method.estimateGas(tx));
 						return await self._host.sendTransaction(opts, cb);
 					};
-					method.call = function(opts?: any, ...args: any[]) {
+
+					method.call = async function(opts?: any, ...args: any[]) {
 						var {from, gasPrice, gas} = opts || {};
-						return call.call(this, {from, gasPrice, gas}, ...args);
+						try {
+							return await call.call(this, {from, gasPrice, gas}, ...args);
+						} catch(err: any) {
+							if (err.message.indexOf('execution reverted') != -1) {
+								throw Error.new(errno.ERR_SOLIDITY_EXEC_ERROR);
+							}
+							throw err;
+						}
 					};
 					return method;
 				};
@@ -345,8 +361,8 @@ export class Web3 implements IWeb3 {
 			try {
 				blockNumber = await this.getBlockNumber();
 			} catch(err) {}
-			var timeout = (Number(opts.timeout) || base.SAFE_TRANSACTION_MAX_TIMEOUT) + Date.now();
-			var blockRange = Number(opts.blockRange) || base.TRANSACTION_MAX_BLOCK_RANGE;
+			var timeout = (Number(opts.timeout) || base.TRANSACTION_TIMEOUT) + Date.now();
+			var blockRange = Number(opts.blockRange) || base.TRANSACTION_BLOCK_RANGE_LIMIT;
 			var id = utils.getId();
 			console.log('send signed Transaction', id, txid);
 			this._watchList.set(txid, {id, opts: opts || {}, resolve, reject, timeout, blockNumber, blockRange, noneConfirm: 0});
@@ -394,11 +410,12 @@ export class Web3 implements IWeb3 {
 					}
 				}
 
-				else if (tx.timeout < Date.now()) {
+				else if (tx.timeout < Date.now()) { // check timeout
 					error( txid, tx.id, Error.new(errno.ERR_REQUEST_TIMEOUT) );
 				}
-
 				else {
+
+					// check block range
 					var blockNumber = await getBlockNumber();
 					if (blockNumber) {
 						if (tx.blockNumber) {
@@ -495,8 +512,15 @@ export class Web3 implements IWeb3 {
 		}
 	}
 
-	sendRawTransaction(tx: IBuffer): Promise<string> {
-		return this.request('eth_sendRawTransaction', ['0x' + tx.toString('hex')]);
+	async sendRawTransaction(tx: IBuffer): Promise<string> {
+		try {
+			var txid = await this.request('eth_sendRawTransaction', ['0x' + tx.toString('hex')]);
+		} catch(err: any) {
+			if (err.message.indexOf('insufficient funds') != -1)
+				throw Error.new(errno.ERR_INSUFFICIENT_FUNDS_FOR_TX);
+			throw err;
+		}
+		return txid;
 	}
 
 	/**
