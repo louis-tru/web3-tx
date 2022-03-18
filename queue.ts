@@ -138,13 +138,13 @@ export class MemoryTransactionQueue {
 								console.warn(err);
 								queue.list.push(item); // retry back
 							} else {
-								opts_.nonceTimeout = 0; // disable timeout
+								if (err.errno != errno.ERR_INSUFFICIENT_FUNDS_FOR_TX[0])
+									opts_.nonceTimeout = 0; // disable wait nonce Timeout
 								reject(err);
 							}
 						} else { // force retry
 							console.warn('TransactionQueue_push_dequeue, web3 tx fail force retry *********', opts, err);
-							opts_.nonceTimeout = 0; // disable timeout
-							// opts_.gasPrice = 0;
+							opts_.nonceTimeout = 0; // disable wait nonce Timeout
 							queue.list.unshift(item); // retry queue
 							await utils.sleep(1e3); // sleep 2s
 						}
