@@ -565,7 +565,7 @@ export class Web3 implements IWeb3 {
 		var tx_ = await setTx(this, tx);
 		try {
 			var txid = await this.request('eth_sendTransaction', [tx_]);
-		} catch(err) {
+		} catch(err: any) {
 			this._throwSendTxError(err);
 		}
 		utils.assert(txid, errno.ERR_SEND_RAW_TRANSACTION_FAIL);
