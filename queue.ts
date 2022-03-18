@@ -91,7 +91,7 @@ export class MemoryTransactionQueue {
 				console.warn('TransactionQueue#_dequeue', err);
 				await utils.sleep(1e3); // sleep 1s
 			}
-			this._dequeue(queue);
+			utils.nextTick(()=>this._dequeue(queue));
 		} else {
 			queue.running = false;
 		}
@@ -138,12 +138,13 @@ export class MemoryTransactionQueue {
 								console.warn(err);
 								queue.list.push(item); // retry back
 							} else {
+								opts_.nonceTimeout = 0; // disable timeout
 								reject(err);
 							}
 						} else { // force retry
 							console.warn('TransactionQueue_push_dequeue, web3 tx fail force retry *********', opts, err);
 							opts_.nonceTimeout = 0; // disable timeout
-							opts_.gasPrice = 0;
+							// opts_.gasPrice = 0;
 							queue.list.unshift(item); // retry queue
 							await utils.sleep(1e3); // sleep 2s
 						}
