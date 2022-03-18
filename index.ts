@@ -329,7 +329,7 @@ export class Web3 implements IWeb3 {
 	}
 
 	async gasPrice() {
-		return Number(await this.eth.getGasPrice());
+		return Number(await this.eth.getGasPrice()) || 0;
 	}
 
 	get eth() {

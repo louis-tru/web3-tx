@@ -53,7 +53,7 @@ interface DeOptionsInl extends DeOptions {
 interface QueueItem {
 	retry: number;
 	options: Options;
-	dequeue: (nonce: DeOptions | null)=>Promise<any>
+	dequeue: (nonce: DeOptionsInl | null)=>Promise<any>
 }
 
 interface Queue {
@@ -84,9 +84,9 @@ export class MemoryTransactionQueue {
 			try {
 				var ctx = first.value;
 				await this.beforeDequeue();
-				var nonce = await this.getNonce_(ctx.options.from, ctx.options.nonceTimeout);
+				var opts = await this.getNonce_(ctx.options.from, ctx.options.nonceTimeout);
 				queue.list.shift();
-				await ctx.dequeue(nonce);
+				await ctx.dequeue(opts);
 			} catch (err) {
 				console.warn('TransactionQueue#_dequeue', err);
 				await utils.sleep(1e3); // sleep 1s
@@ -114,39 +114,39 @@ export class MemoryTransactionQueue {
 			var item: QueueItem = {
 				retry,
 				options,
-				dequeue: async (opts: DeOptions | null)=>{
-					do {
-						var forceRetry = false;
-						try {
-							if (opts) {
-								resolve(await exec(opts));
-							} else { // retry, wait nonce
-								queue.list.unshift(item); // retry queue
-								await utils.sleep(1e4); // sleep 10s
-							}
-						} catch(err: any) {
-							if (/*!err.httpErr && (*/
-									 err.errno == errno.ERR_TRANSACTION_STATUS_FAIL[0] // fail
-								|| err.errno == errno.ERR_TRANSACTION_INVALID[0]    // invalid
-								|| err.errno == errno.ERR_EXECUTION_REVERTED[0] // exec 
-								|| err.errno == errno.ERR_SOLIDITY_EXEC_ERROR[0] // exec 
-								|| err.errno == errno.ERR_INSUFFICIENT_FUNDS_FOR_TX[0] // insufficient funds for transaction
-								|| err.errno == errno.ERR_TRANSACTION_BLOCK_RANGE_LIMIT[0] // block limit
-								|| err.errno == errno.ERR_TRANSACTION_TIMEOUT[0] // timeout
-							/*)*/) {
-								if (item.retry--) {
-									console.warn(err);
-									queue.list.push(item); // retry back
-								} else {
-									reject(err);
-								}
-							} else { // force retry
-								console.warn('TransactionQueue_push_dequeue, web3 tx fail force retry *********', opts, err);
-								forceRetry = true;
-								await utils.sleep(5e3); // sleep 5s
-							}
+				dequeue: async (opts: DeOptionsInl | null)=>{
+					try {
+						if (opts) {
+							resolve(await exec({...opts}));
+						} else { // retry, wait nonce
+							queue.list.unshift(item); // retry queue
+							await utils.sleep(1e4); // sleep 10s
+							return;
 						}
-					} while(forceRetry);
+					} catch(err: any) {
+						var opts_ = opts as DeOptionsInl;
+						if (/*!err.httpErr && (*/
+								 err.errno == errno.ERR_TRANSACTION_STATUS_FAIL[0] // fail
+							|| err.errno == errno.ERR_TRANSACTION_INVALID[0]    // invalid
+							|| err.errno == errno.ERR_EXECUTION_REVERTED[0] // exec 
+							|| err.errno == errno.ERR_SOLIDITY_EXEC_ERROR[0] // exec 
+							|| err.errno == errno.ERR_INSUFFICIENT_FUNDS_FOR_TX[0] // insufficient funds for transaction
+							|| err.errno == errno.ERR_TRANSACTION_BLOCK_RANGE_LIMIT[0] // block limit
+							|| err.errno == errno.ERR_TRANSACTION_TIMEOUT[0] // timeout
+						/*)*/) {
+							if (item.retry--) {
+								console.warn(err);
+								queue.list.push(item); // retry back
+							} else {
+								reject(err);
+							}
+						} else { // force retry
+							console.warn('TransactionQueue_push_dequeue, web3 tx fail force retry *********', opts, err);
+							opts_.nonceTimeout = 0; // disable timeout
+							queue.list.unshift(item); // retry queue
+							await utils.sleep(1e3); // sleep 2s
+						}
+					}
 				},
 			};
 
@@ -177,7 +177,7 @@ export class MemoryTransactionQueue {
 	}
 
 	// @private getNonce_()
-	private async getNonce_(account?: string, _timeout?: number, greedy?: boolean): Promise<DeOptions | null> {
+	private async getNonce_(account?: string, _timeout?: number, greedy?: boolean): Promise<DeOptionsInl | null> {
 		var from = account || await this._host.defaultAccount();
 		utils.assert(from, 'getNonce error account empty');
 
@@ -195,16 +195,16 @@ export class MemoryTransactionQueue {
 			if (now > opt.nonceTimeout) { // pending and is timeout
 				opt.nonceTimeout = nonceTimeout; // new tomeiut
 				opt.gasPrice = Math.max(gasPrice, opt.gasPrice + 10);
-				let { nonceTimeout: _, ...deOpt } = opt;
-				return deOpt;
+				return opt;
 			}
 			nonce++;
 			item = item.next;
 		}
 
 		if (greedy || curNonce == nonce) {
-			list.push({ from, nonce, gasPrice, nonceTimeout });
-			return { from, nonce, gasPrice };
+			var opt = { from, nonce, gasPrice, nonceTimeout };
+			list.push(opt);
+			return opt;
 		}
 
 		return null;
@@ -213,8 +213,9 @@ export class MemoryTransactionQueue {
 	/**
 	 * @func getNonce() 获取排队nonce
 	 */
-	getNonce(account?: string, timeout?: number): Promise<DeOptions> {
-		return this.getNonce_(account, timeout, true) as Promise<DeOptions>;
+	async getNonce(account?: string, timeout?: number): Promise<DeOptions> {
+		var  { nonceTimeout, ...opts} = await this.getNonce_(account, timeout, true) as DeOptionsInl;
+		return opts;
 	}
 
 }
