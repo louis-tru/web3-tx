@@ -585,7 +585,8 @@ export class Web3 implements IWeb3 {
 	// Rewrite by method
 
 	async getBlockNumber() {
-		return await utils.timeout(this.eth.getBlockNumber(), 1e4);
+		var num = await utils.timeout(this.eth.getBlockNumber(), 1e4);
+		return Number(num) || 0;
 	}
 
 	async getNonce(account?: string): Promise<number> {
