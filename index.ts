@@ -589,6 +589,9 @@ export class Web3 implements IWeb3 {
 	}
 
 	async getNonce(account?: string): Promise<number> {
-		return await utils.timeout(this.eth.getTransactionCount(account || await this.defaultAccount(), 'latest'), 1e4);
+		var nonce = await utils.timeout(this.eth.getTransactionCount(account || await this.defaultAccount(), 'latest'), 1e4);
+		nonce = Number(nonce) || -1;
+		utils.assert(nonce >= 0, 'Web3#getNonce error, nonce >= 0');
+		return nonce;
 	}
 }
