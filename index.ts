@@ -87,6 +87,7 @@ async function setTx(self: IWeb3, tx: TxOptions, estimateGas?: (tx: TxOptions)=>
 	if (!tx.gas)
 		try {
 			tx.gas = await estimateGas({...tx,
+				gasPrice: 0,
 				chainId: '0x' + tx.chainId.toString(16),
 				nonce: '0x' + tx.nonce.toString(16),
 			} as any);
@@ -541,13 +542,17 @@ export class Web3 implements IWeb3 {
 		}
 	}
 
+	private _throwSendTxError(err: Error) {
+		if (err.message && err.message.toLowerCase().indexOf('insufficient funds') != -1)
+			err.errno = errno.ERR_INSUFFICIENT_FUNDS_FOR_TX[0];
+		throw err;
+	}
+
 	async sendRawTransaction(tx: IBuffer): Promise<string> {
 		try {
 			var txid = await this.request('eth_sendRawTransaction', ['0x' + tx.toString('hex')]);
 		} catch(err: any) {
-			if (err.message && err.message.toLowerCase().indexOf('insufficient funds') != -1)
-				err.errno == errno.ERR_INSUFFICIENT_FUNDS_FOR_TX[0];
-			throw err;
+			this._throwSendTxError(err);
 		}
 		utils.assert(txid, errno.ERR_SEND_RAW_TRANSACTION_FAIL);
 		return txid;
@@ -558,7 +563,12 @@ export class Web3 implements IWeb3 {
 	 */
 	async sendTransaction(tx: TxOptions, cb?: SendCallback): TransactionPromise {
 		var tx_ = await setTx(this, tx);
-		var txid = await this.request('eth_sendTransaction', [tx_]);
+		try {
+			var txid = await this.request('eth_sendTransaction', [tx_]);
+		} catch(err) {
+			this._throwSendTxError(err);
+		}
+		utils.assert(txid, errno.ERR_SEND_RAW_TRANSACTION_FAIL);
 		if (cb)
 			await cb(txid, tx);
 		return this._checkTransaction(txid, tx);
