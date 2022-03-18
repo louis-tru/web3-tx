@@ -80,7 +80,7 @@ async function setTx(self: IWeb3, tx: TxOptions, estimateGas?: (tx: TxOptions)=>
 	estimateGas = estimateGas || ((tx: TxOptions)=>self.eth.estimateGas(tx));
 	tx.from = tx.from || await self.defaultAccount();
 	tx.nonce = tx.nonce || await self.eth.getTransactionCount(tx.from);
-	tx.chainId = tx.chainId || await self.eth.getChainId();
+	tx.chainId = tx.chainId || await self.getChainId() || 0;
 	tx.value = tx.value || '0x0';
 	tx.data = tx.data || '0x';
 
@@ -119,6 +119,7 @@ export interface IWeb3 {
 	readonly raw: base.Web3Raw;
 	readonly eth: Eth;
 	gasPrice(): Promise<number>;
+	getChainId(): Promise<number>;
 	defaultAccount(): Promise<string>;
 	createContract(address: string, abi: AbiItem[]): Contract;
 	sendTransaction(tx: TxOptions, cb?: SendCallback): TransactionPromise;
@@ -328,8 +329,24 @@ export class Web3 implements IWeb3 {
 		return this.raw.defaultAccount || (await this.eth.getAccounts())[0] || '';
 	}
 
+	private _gasPriceTimeout = 0;
+	private _gasPrice = 0;
+
 	async gasPrice() {
-		return Number(await this.eth.getGasPrice()) || 0;
+		if (!this._gasPrice || this._gasPriceTimeout < Date.now()) {
+			this._gasPrice = Number(await this.eth.getGasPrice()) || 0;
+			this._gasPriceTimeout = Date.now() + 6e4; // 60s
+		}
+		return this._gasPrice;
+	}
+
+	private _getChainId = 0;
+
+	async getChainId() {
+		if (!this._getChainId) {
+			this._getChainId = Number(await this.eth.getChainId()) || 0;
+		}
+		return this._gasPrice;
 	}
 
 	get eth() {
