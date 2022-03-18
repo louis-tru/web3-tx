@@ -295,6 +295,15 @@ export class Contract extends ContractBase {
 export class Web3 implements IWeb3 {
 	private _raw?: base.Web3Raw;
 	private _provider?: MultipleProvider;
+	private _watchInterval = 1e4;
+
+	get watchInterval() {
+		return this._watchInterval;
+	}
+
+	set watchInterval(val: number) {
+		this._watchInterval = Math.max(Number(val) || 2e3, 2e3);
+	}
 
 	TRANSACTION_CHECK_TIME = base.TRANSACTION_CHECK_TIME;
 
@@ -471,7 +480,7 @@ export class Web3 implements IWeb3 {
 		this._watching = false;
 
 		if (this._watchList.size) {
-			setTimeout(()=>this._watchTx(), 1e4); // 10s
+			setTimeout(()=>this._watchTx(), this._watchInterval);
 		}
 	}
 
