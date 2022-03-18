@@ -346,7 +346,7 @@ export class Web3 implements IWeb3 {
 		if (!this._getChainId) {
 			this._getChainId = Number(await this.eth.getChainId()) || 0;
 		}
-		return this._gasPrice;
+		return this._getChainId;
 	}
 
 	get eth() {
