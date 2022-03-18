@@ -143,6 +143,7 @@ export class MemoryTransactionQueue {
 						} else { // force retry
 							console.warn('TransactionQueue_push_dequeue, web3 tx fail force retry *********', opts, err);
 							opts_.nonceTimeout = 0; // disable timeout
+							opts_.gasPrice = 0;
 							queue.list.unshift(item); // retry queue
 							await utils.sleep(1e3); // sleep 2s
 						}
@@ -194,7 +195,7 @@ export class MemoryTransactionQueue {
 			utils.assert(nonce == opt.nonce, 'TransactionQueue#getNonce_, nonce no match');
 			if (now > opt.nonceTimeout) { // pending and is timeout
 				opt.nonceTimeout = nonceTimeout; // new tomeiut
-				opt.gasPrice = Math.max(gasPrice, opt.gasPrice + 10);
+				opt.gasPrice = opt.gasPrice ? Math.max(gasPrice, opt.gasPrice + 1): gasPrice;
 				return opt;
 			}
 			nonce++;
