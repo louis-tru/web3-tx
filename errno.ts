@@ -13,6 +13,8 @@ export class ErrnoList extends BaseErrnoList {
 	ERR_EXECUTION_REVERTED: ErrnoCode = [100260, 'ERR_EXECUTION_REVERTED']
 	ERR_SOLIDITY_EXEC_ERROR: ErrnoCode = [100261, 'ERR_SOLIDITY_EXEC_ERROR']
 	ERR_INSUFFICIENT_FUNDS_FOR_TX: ErrnoCode = [100262, 'insufficient funds for transaction']
+	ERR_SEND_RAW_TRANSACTION_FAIL: ErrnoCode = [100263, 'ERR_SEND_RAW_TRANSACTION_FAIL']
+	
 };
 
 export default new ErrnoList();

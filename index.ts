@@ -549,6 +549,7 @@ export class Web3 implements IWeb3 {
 				err.errno == errno.ERR_INSUFFICIENT_FUNDS_FOR_TX[0];
 			throw err;
 		}
+		utils.assert(txid, errno.ERR_SEND_RAW_TRANSACTION_FAIL);
 		return txid;
 	}
 
