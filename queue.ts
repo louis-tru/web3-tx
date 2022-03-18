@@ -139,7 +139,7 @@ export class MemoryTransactionQueue {
 								queue.list.push(item); // retry back
 							} else {
 								if (err.errno != errno.ERR_INSUFFICIENT_FUNDS_FOR_TX[0])
-									opts_.nonceTimeout = 0; // disable wait nonce Timeout
+									opts_.nonceTimeout = Date.now() + 3e4; // wait 30s
 								reject(err);
 							}
 						} else { // force retry
