@@ -296,7 +296,12 @@ export class Contract extends ContractBase {
 export class Web3 implements IWeb3 {
 	private _raw?: base.Web3Raw;
 	private _provider?: MultipleProvider;
-	private _watchInterval = 1e4;
+	private _watchInterval = 1e4; // 10s
+	private _getChainId = 0;
+	private _gasPriceTimeout = 0;
+	private _gasPrice = 0;
+	private _getBlockNumber = 0;
+	private _getBlockNumberTimeout = 0;
 
 	get watchInterval() {
 		return this._watchInterval;
@@ -339,24 +344,34 @@ export class Web3 implements IWeb3 {
 		return this.raw.defaultAccount || (await this.eth.getAccounts())[0] || '';
 	}
 
-	private _gasPriceTimeout = 0;
-	private _gasPrice = 0;
+	async getChainId() {
+		if (!this._getChainId) {
+			this._getChainId = Number(await utils.timeout(this.eth.getChainId(), 1e4)) || 0;
+		}
+		return this._getChainId;
+	}
 
 	async gasPrice() {
 		if (!this._gasPrice || this._gasPriceTimeout < Date.now()) {
-			this._gasPrice = Number(await this.eth.getGasPrice()) || 0;
+			this._gasPrice = Number(await utils.timeout(this.eth.getGasPrice(), 1e4)) || 0;
 			this._gasPriceTimeout = Date.now() + 6e4; // 60s
 		}
 		return this._gasPrice;
 	}
 
-	private _getChainId = 0;
-
-	async getChainId() {
-		if (!this._getChainId) {
-			this._getChainId = Number(await this.eth.getChainId()) || 0;
+	async getBlockNumber() {
+		if (!this._getBlockNumber || this._getBlockNumberTimeout < Date.now()) {
+			this._getBlockNumber = Number(await utils.timeout(this.eth.getBlockNumber(), 1e4)) || 0;
+			this._getBlockNumberTimeout = Date.now() + 1e4; // 10s
 		}
-		return this._getChainId;
+		return this._getBlockNumber;
+	}
+
+	async getNonce(account?: string): Promise<number> {
+		var nonce = await utils.timeout(this.eth.getTransactionCount(account || await this.defaultAccount(), 'latest'), 1e4);
+		nonce = Number(nonce) || -1;
+		utils.assert(nonce >= 0, 'Web3#getNonce asset, nonce >= 0');
+		return nonce;
 	}
 
 	get eth() {
@@ -405,20 +420,7 @@ export class Web3 implements IWeb3 {
 		this._watching = true;
 
 		var self = this;
-		var _blockNumber = 0;
-		var _blockNumberTime = 0;
-
-		async function getBlockNumber() {
-			if (!_blockNumber || _blockNumberTime + 3e4 < Date.now()) {
-				try {
-					_blockNumber = await self.getBlockNumber();
-					_blockNumberTime = Date.now();
-				} catch(err) {
-					console.warn(err);
-				}
-			}
-			return _blockNumber;
-		}
+		var time = Date.now();
 
 		function error(txid: string, id: number, err: Error) {
 			console.warn('send signed Transaction fail', id, txid);
@@ -446,7 +448,7 @@ export class Web3 implements IWeb3 {
 				else {
 
 					// check block range
-					var blockNumber = await getBlockNumber();
+					var blockNumber = await this.getBlockNumber();
 					if (blockNumber) {
 						if (tx.blockNumber) {
 							var limit_block = tx.blockNumber + tx.blockRange;
@@ -481,7 +483,7 @@ export class Web3 implements IWeb3 {
 		this._watching = false;
 
 		if (this._watchList.size) {
-			setTimeout(()=>this._watchTx(), this._watchInterval);
+			setTimeout(()=>this._watchTx(), Math.max(0, this._watchInterval - Date.now() + time));
 		}
 	}
 
@@ -592,17 +594,4 @@ export class Web3 implements IWeb3 {
 		return this._checkTransaction(txid, opts);
 	}
 
-	// Rewrite by method
-
-	async getBlockNumber() {
-		var num = await utils.timeout(this.eth.getBlockNumber(), 1e4);
-		return Number(num) || 0;
-	}
-
-	async getNonce(account?: string): Promise<number> {
-		var nonce = await utils.timeout(this.eth.getTransactionCount(account || await this.defaultAccount(), 'latest'), 1e4);
-		nonce = Number(nonce) || -1;
-		utils.assert(nonce >= 0, 'Web3#getNonce error, nonce >= 0');
-		return nonce;
-	}
 }

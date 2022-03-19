@@ -89,7 +89,7 @@ export class MemoryTransactionQueue {
 				await ctx.dequeue(opts);
 			} catch (err) {
 				console.warn('TransactionQueue#_dequeue', err);
-				await utils.sleep(1e3); // sleep 1s
+				await utils.sleep(2e3); // sleep 1s
 			}
 			utils.nextTick(()=>this._dequeue(queue));
 		} else {
@@ -146,7 +146,7 @@ export class MemoryTransactionQueue {
 							console.warn('TransactionQueue_push_dequeue, web3 tx fail force retry *********', opts, err);
 							opts_.nonceTimeout = 0; // disable wait nonce Timeout
 							queue.list.unshift(item); // retry queue
-							await utils.sleep(1e3); // sleep 2s
+							await utils.sleep(2e3); // sleep 2s
 						}
 					}
 				},
