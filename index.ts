@@ -84,7 +84,7 @@ async function setTx(self: IWeb3, tx: TxOptions, estimateGas?: (tx: TxOptions)=>
 	tx.value = tx.value || '0x0';
 	tx.data = tx.data || '0x';
 
-	if (!tx.gas)
+	if (!tx.gas) {
 		try {
 			tx.gas = await estimateGas({...tx,
 				gasPrice: 0,
@@ -96,12 +96,17 @@ async function setTx(self: IWeb3, tx: TxOptions, estimateGas?: (tx: TxOptions)=>
 				throw Error.new(errno.ERR_INSUFFICIENT_FUNDS_FOR_TX);
 			throw err;
 		}
+	}
 
 	if (!tx.gasLimit) // 程序运行时步数限制 default
 		tx.gasLimit = parseInt(String(tx.gas * 1.2)); // suggested gas limit
 
 	if (!tx.gasPrice) // 程序运行单步的wei数量wei default
 		tx.gasPrice = await self.gasPrice() || base.DEFAULT_GAS_PRICE;
+
+	if (self.gasPriceLimit) {
+		tx.gasPrice = Math.min(self.gasPriceLimit, tx.gasPrice);
+	}
 
 	return {
 		from: tx.from,
@@ -119,6 +124,7 @@ async function setTx(self: IWeb3, tx: TxOptions, estimateGas?: (tx: TxOptions)=>
 export interface IWeb3 {
 	readonly raw: base.Web3Raw;
 	readonly eth: Eth;
+	readonly gasPriceLimit: number;
 	gasPrice(): Promise<number>;
 	getChainId(): Promise<number>;
 	defaultAccount(): Promise<string>;
@@ -302,6 +308,15 @@ export class Web3 implements IWeb3 {
 	private _gasPrice = 0;
 	private _getBlockNumber = 0;
 	private _getBlockNumberTimeout = 0;
+	private _gasPriceLimit = 0;
+
+	get gasPriceLimit() {
+		return this._gasPriceLimit;
+	}
+
+	set gasPriceLimit(val: number) {
+		this._gasPriceLimit = val;
+	}
 
 	get watchInterval() {
 		return this._watchInterval;
@@ -371,6 +386,12 @@ export class Web3 implements IWeb3 {
 		var nonce = Number(await utils.timeout(this.eth.getTransactionCount(account || await this.defaultAccount(), 'latest'), 1e4));
 		utils.assert(!isNaN(nonce), 'Web3#getNonce asset, nonce >= 0');
 		return nonce;
+	}
+
+	async getBalance(address: string) {
+		var balance = Number(await this.eth.getBalance(address));
+		utils.assert(!isNaN(balance), 'Web3#getBalance asset, balance >= 0');
+		return balance;
 	}
 
 	get eth() {
