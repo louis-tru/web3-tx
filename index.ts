@@ -456,7 +456,8 @@ export class Web3 implements IWeb3 {
 
 		for (var [txid,tx] of this._watchList) {
 			try {
-				var receipt = await utils.timeout(this.checkTransaction(txid), 1e4);
+				// var receipt = await utils.timeout(this.checkTransaction(txid), 1e4);
+				var receipt = await utils.timeout(self.eth.getTransactionReceipt(txid), 1e4);
 
 				if (receipt) {
 					if (receipt.status) {
@@ -493,7 +494,7 @@ export class Web3 implements IWeb3 {
 						var nonce = await self.getNonce(opts.from);
 						if (nonce > opts.nonce) { //
 							if (tx.noneConfirm) {
-								if (blockNumber > tx.noneConfirm)
+								if (blockNumber > tx.noneConfirm + 32)
 									error( txid, tx.id, Error.new(errno.ERR_TRANSACTION_INVALID) );
 							} else {
 								tx.noneConfirm = blockNumber;
