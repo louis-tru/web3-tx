@@ -92,8 +92,14 @@ async function setTx(self: IWeb3, tx: TxOptions, estimateGas?: (tx: TxOptions)=>
 				nonce: '0x' + tx.nonce.toString(16),
 			} as any);
 		} catch(err: any) {
-			if (err.message && err.message.toLowerCase().indexOf('insufficient funds') != -1)
-				throw Error.new(errno.ERR_INSUFFICIENT_FUNDS_FOR_TX);
+			if (err.message) {
+				var msg = err.message.toLowerCase();
+				if (msg.indexOf('insufficient funds') != -1) {
+					err.errno = errno.ERR_INSUFFICIENT_FUNDS_FOR_TX[0];
+				} else if (msg.indexOf('execution reverted') != -1) {
+					err.errno = errno.ERR_EXECUTION_REVERTED[0];
+				}
+			}
 			throw err;
 		}
 	}
