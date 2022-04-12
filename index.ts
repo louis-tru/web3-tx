@@ -76,7 +76,7 @@ class TxSigner {
 	}
 }
 
-function _throwTxCallError(err: Error, httpErrErrno?: ErrnoCode) {
+function _throwTxCallError(err: Error, defaultErrno?: ErrnoCode) {
 	if (err.message) {
 		var msg = err.message.toLowerCase();
 		if (msg.indexOf('insufficient funds') != -1) {
@@ -85,8 +85,8 @@ function _throwTxCallError(err: Error, httpErrErrno?: ErrnoCode) {
 			err.errno = errno.ERR_EXECUTION_REVERTED[0];
 		} else if (msg.indexOf('gas required exceeds allowance') != -1) { // gas required exceeds allowance (8000000)
 			err.errno = errno.ERR_GAS_REQUIRED_LIMIT[0];
-		} else if (!err.httpErr && httpErrErrno) { //
-			err.errno = httpErrErrno[0];
+		} else if (!err.httpErr && defaultErrno) { //
+			err.errno = defaultErrno[0];
 		}
 	}
 	throw err;
