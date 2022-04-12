@@ -125,15 +125,18 @@ export class MemoryTransactionQueue {
 						}
 					} catch(err: any) {
 						var opts_ = opts as DeOptionsInl;
-						if (/*!err.httpErr && (*/
-								 err.errno == errno.ERR_TRANSACTION_STATUS_FAIL[0] // fail
-							|| err.errno == errno.ERR_TRANSACTION_INVALID[0]    // invalid
-							|| err.errno == errno.ERR_EXECUTION_REVERTED[0] // exec 
-							|| err.errno == errno.ERR_SOLIDITY_EXEC_ERROR[0] // exec 
-							|| err.errno == errno.ERR_INSUFFICIENT_FUNDS_FOR_TX[0] // insufficient funds for transaction
-							|| err.errno == errno.ERR_TRANSACTION_BLOCK_RANGE_LIMIT[0] // block limit
-							|| err.errno == errno.ERR_TRANSACTION_TIMEOUT[0] // timeout
-						/*)*/) {
+						var errnos: ErrnoCode[] = [
+							errno.ERR_TRANSACTION_STATUS_FAIL, // fail
+							errno.ERR_TRANSACTION_SEND_FAIL, // send tx fail
+							errno.ERR_TRANSACTION_INVALID,    // invalid
+							errno.ERR_EXECUTION_REVERTED, // exec fail
+							errno.ERR_SOLIDITY_EXEC_ERROR, // exec fail
+							errno.ERR_INSUFFICIENT_FUNDS_FOR_TX, // insufficient funds for transaction
+							errno.ERR_TRANSACTION_BLOCK_RANGE_LIMIT, // block limit
+							errno.ERR_GAS_REQUIRED_LIMIT, // gas limit
+							errno.ERR_TRANSACTION_TIMEOUT, // timeout
+						];
+						if ( errnos.find(([e])=>err.errno==e) ) {
 							if (item.retry--) {
 								console.warn(err);
 								queue.list.push(item); // retry back

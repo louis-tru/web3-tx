@@ -76,6 +76,22 @@ class TxSigner {
 	}
 }
 
+function _throwTxCallError(err: Error, httpErrErrno?: ErrnoCode) {
+	if (err.message) {
+		var msg = err.message.toLowerCase();
+		if (msg.indexOf('insufficient funds') != -1) {
+			err.errno = errno.ERR_INSUFFICIENT_FUNDS_FOR_TX[0];
+		} else if (msg.indexOf('execution reverted') != -1) {
+			err.errno = errno.ERR_EXECUTION_REVERTED[0];
+		} else if (msg.indexOf('gas required exceeds allowance') != -1) { // gas required exceeds allowance (8000000)
+			err.errno = errno.ERR_GAS_REQUIRED_LIMIT[0];
+		} else if (!err.httpErr && httpErrErrno) { //
+			err.errno = httpErrErrno[0];
+		}
+	}
+	throw err;
+}
+
 async function setTx(self: IWeb3, tx: TxOptions, estimateGas?: (tx: TxOptions)=>Promise<number>) {
 	estimateGas = estimateGas || ((tx: TxOptions)=>self.eth.estimateGas(tx));
 	tx.from = tx.from || await self.defaultAccount();
@@ -92,15 +108,8 @@ async function setTx(self: IWeb3, tx: TxOptions, estimateGas?: (tx: TxOptions)=>
 				nonce: '0x' + tx.nonce.toString(16),
 			} as any);
 		} catch(err: any) {
-			if (err.message) {
-				var msg = err.message.toLowerCase();
-				if (msg.indexOf('insufficient funds') != -1) {
-					err.errno = errno.ERR_INSUFFICIENT_FUNDS_FOR_TX[0];
-				} else if (msg.indexOf('execution reverted') != -1) {
-					err.errno = errno.ERR_EXECUTION_REVERTED[0];
-				}
-			}
-			throw err;
+			_throwTxCallError(err, errno.ERR_TRANSACTION_SEND_FAIL);
+			return;
 		}
 	}
 
@@ -224,13 +233,7 @@ export class Contract extends ContractBase {
 						try {
 							return await call.call(this, {from, gasPrice, gas}, ...args);
 						} catch(err: any) {
-							if (err.message && err.message.toLowerCase().indexOf('execution reverted') != -1) {
-								// throw Error.new(errno.ERR_SOLIDITY_EXEC_ERROR);
-								err.errno = errno.ERR_EXECUTION_REVERTED[0];
-							} else if (!err.httpErr) { //
-								err.errno = errno.ERR_SOLIDITY_EXEC_ERROR[0];
-							}
-							throw err;
+							_throwTxCallError(err, errno.ERR_SOLIDITY_EXEC_ERROR);
 						}
 					};
 					return method;
@@ -571,17 +574,11 @@ export class Web3 implements IWeb3 {
 		}
 	}
 
-	private _throwSendTxError(err: Error) {
-		if (err.message && err.message.toLowerCase().indexOf('insufficient funds') != -1)
-			err.errno = errno.ERR_INSUFFICIENT_FUNDS_FOR_TX[0];
-		throw err;
-	}
-
 	async sendRawTransaction(tx: IBuffer): Promise<string> {
 		try {
 			var txid = await this.request('eth_sendRawTransaction', ['0x' + tx.toString('hex')]);
 		} catch(err: any) {
-			this._throwSendTxError(err);
+			_throwTxCallError(err);
 		}
 		utils.assert(txid, errno.ERR_SEND_RAW_TRANSACTION_FAIL);
 		return txid;
@@ -595,7 +592,7 @@ export class Web3 implements IWeb3 {
 		try {
 			var txid = await this.request('eth_sendTransaction', [tx_]);
 		} catch(err: any) {
-			this._throwSendTxError(err);
+			_throwTxCallError(err);
 		}
 		utils.assert(txid, errno.ERR_SEND_RAW_TRANSACTION_FAIL);
 		if (cb)

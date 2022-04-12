@@ -14,7 +14,8 @@ export class ErrnoList extends BaseErrnoList {
 	ERR_SOLIDITY_EXEC_ERROR: ErrnoCode = [100261, 'ERR_SOLIDITY_EXEC_ERROR']
 	ERR_INSUFFICIENT_FUNDS_FOR_TX: ErrnoCode = [100262, 'insufficient funds for transaction']
 	ERR_SEND_RAW_TRANSACTION_FAIL: ErrnoCode = [100263, 'ERR_SEND_RAW_TRANSACTION_FAIL']
-	
+	ERR_GAS_REQUIRED_LIMIT: ErrnoCode = [101000, 'ERR_GAS_REQUIRED_LIMIT']
+	ERR_TRANSACTION_SEND_FAIL: ErrnoCode = [101001, 'ERR_TRANSACTION_SEND_FAIL']
 };
 
 export default new ErrnoList();
