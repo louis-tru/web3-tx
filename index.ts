@@ -102,9 +102,12 @@ async function setTx(self: IWeb3, tx: TxOptions, estimateGas?: (tx: TxOptions)=>
 
 	if (!tx.gas) {
 		try {
-			tx.gas = await estimateGas({...tx,
+			tx.gas = await estimateGas({
+				from: tx.from,
+				to: tx.to || '',
+				value: tx.value,
+				data: tx.data,
 				gasPrice: 0,
-				chainId: '0x' + tx.chainId.toString(16),
 				nonce: '0x' + tx.nonce.toString(16),
 			} as any);
 		} catch(err: any) {
