@@ -36,8 +36,8 @@ import { Contract as __Contract, Options as ContractOptions, EventData } from 'w
 import {Transaction,TransactionReceipt } from 'web3-core';
 import { Eth } from 'web3-eth';
 import {AbiItem} from 'web3-utils';
-// import { JsonRpcResponse } from 'web3-core-helpers';
 import { MultipleProvider, Provider } from './provider';
+import {Signature} from 'crypto-tx/sign';
 
 export * from './base';
 export * from './provider';
@@ -52,11 +52,6 @@ type TxOptions = base.TxOptions;
 type SendCallback = base.SendCallback;
 type TransactionPromise = base.TransactionPromise;
 type SerializedTx = base.SerializedTx;
-
-export interface Signature {
-	signature: IBuffer;
-	recovery: number;
-}
 
 class TxSigner {
 	private _account: string;
