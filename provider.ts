@@ -69,7 +69,7 @@ export class MultipleProvider implements BaseProvider {
 				// 10/http://103.210.22.186:8545   random priority = 10
 				if (m) {
 					priority = Number(m[1]) || 1;
-					provider = provider.substr(m[0].length);
+					provider = provider.substring(m[0].length);
 				}
 				if (_priority[j]) {
 					priority = Number(_priority[j]) || priority;

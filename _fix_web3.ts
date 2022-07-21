@@ -35,6 +35,22 @@ function send(this: any, payload: any, callback: (err?: any, data?: any)=>void) 
 	var request = this._prepareRequest();
 	var complete = false;
 
+	request.onreadystatechange = function() {
+		if (request.readyState === 4 && request.timeout !== 1) {
+			if (complete) return;
+			complete = true;
+			var result = request.responseText;
+			var error = null;
+			try {
+				result = JSON.parse(result);
+			} catch(e) {
+				error = errors.InvalidResponse(request.responseText);
+			}
+			_this.connected = true;
+			callback(error, result);
+		}
+	};
+
 	request.onloadend = function() {
 		if (complete) return;
 		complete = true;
