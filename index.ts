@@ -196,7 +196,7 @@ export class Contract extends ContractBase {
 		var self = this;
 
 		async function signTx(method: base.ContractSendMethod, opts?: TxOptions) {
-			var _opts = Object.assign(opts, {
+			var _opts = Object.assign(opts || {}, {
 				to: address,
 				data: method.encodeABI(),
 			});
