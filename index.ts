@@ -99,7 +99,7 @@ async function setTx(self: IWeb3, tx: TxOptions, estimateGas?: (tx: TxOptions)=>
 		try {
 			tx.gas = await estimateGas({
 				from: tx.from,
-				to: tx.to || '',
+				to: tx.to || null,
 				value: tx.value,
 				data: tx.data,
 				gasPrice: 0,
@@ -123,7 +123,7 @@ async function setTx(self: IWeb3, tx: TxOptions, estimateGas?: (tx: TxOptions)=>
 
 	return {
 		from: tx.from,
-		to: tx.to || '',
+		to: tx.to || null,
 		nonce: tx.nonce,
 		chainId: tx.chainId,
 		value: tx.value,
