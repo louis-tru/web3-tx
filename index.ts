@@ -216,8 +216,26 @@ export class Contract extends ContractBase {
 					method.signTx = e=>signTx(method, e);
 					method.post = async (e, cb)=>{
 						var opts = e || {};
-						var tx = await signTx(method, opts);
-						return await self._host.sendSignedTransaction(tx.data, opts, cb);
+						if (self._host.sign) {
+							var tx = await signTx(method, opts);
+							return await self._host.sendSignedTransaction(tx.data, opts, cb);
+						} else {
+							Object.assign(opts, { to: address, data: method.encodeABI() });
+							await setTx(self._host, opts, (tx)=>method.estimateGas(tx));
+							try {
+								return await self._host.sendTransaction(opts, cb);
+							} catch(err: any) {
+								if (err.message.indexOf('not a string') != -1) { // Compatible with metamask
+									opts.nonce = String(opts.nonce) as any;
+									opts.gasLimit = '0x' + opts.gasLimit!.toString(16) as any;
+									opts.gas = '0x' + opts.gas!.toString(16) as any;
+									opts.gasPrice = '0x' + opts.gasPrice!.toString(16) as any;
+									return await self._host.sendTransaction(opts, cb);
+								} else {
+									throw err;
+								}
+							}
+						}
 					};
 
 					method.sendRaw = async (e,cb)=>{
