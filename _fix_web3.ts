@@ -6,8 +6,8 @@
 import 'somes';
 import errno from './errno';
 
-function ConnectionTimeout() {
-	return Error.new(errno.ERR_RPC_REQUEST_TIMEOUT);
+function ConnectionTimeout(timeout: any) {
+	return Error.new(errno.ERR_RPC_REQUEST_TIMEOUT).ext({timeout});
 }
 
 function InvalidResponse(result: any) {
@@ -30,7 +30,7 @@ function ErrorResponse(result: any) {
 	}
 }
 
-function send(this: any, payload: any, callback: (err?: any, data?: any)=>void) {
+function sendOld(this: any, payload: any, callback: (err?: any, data?: any)=>void) {
 	var _this = this;
 	var request = this._prepareRequest();
 	var complete = false;
@@ -85,6 +85,7 @@ var HttpProvider = require('web3-providers-http');
 errors.ConnectionTimeout = ConnectionTimeout;
 errors.InvalidResponse = InvalidResponse;
 errors.ErrorResponse = ErrorResponse;
-HttpProvider.prototype.send = send;
+// const rawSend = HttpProvider.prototype.send;
+// HttpProvider.prototype.send = send;
 
 export {}
