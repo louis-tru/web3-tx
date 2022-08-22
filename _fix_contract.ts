@@ -1,6 +1,5 @@
 
 var Contract = require('web3-eth-contract');
-var _ = require('underscore');
 var utils = require('web3-utils');
 
 Contract.prototype._generateEventOptions = function() {
@@ -10,9 +9,9 @@ Contract.prototype._generateEventOptions = function() {
 	var callback = this._getCallback(args);
 
 	// get the options
-	var options = (_.isObject(args[args.length - 1])) ? args.pop() : {};
+	var options = (typeof args[args.length - 1] == 'object') ? args.pop() : {};
 
-	var eventName = (_.isString(args[0])) ? args[0] : 'allevents';
+	var eventName = (typeof args[0] == 'string') ? args[0] : 'allevents';
 	var event = (eventName.toLowerCase() === 'allevents') ? {
 				name: 'ALLEVENTS',
 				jsonInterface: this.options.jsonInterface
