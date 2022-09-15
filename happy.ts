@@ -7,7 +7,7 @@ import somes from 'somes';
 import {IWeb3, TransactionPromise, TransactionReceipt, EventData} from './index';
 import {MemoryTransactionQueue} from './queue';
 import {AbiItem, AbiOutput} from 'web3-utils/types';
-import { Contract, ContractSendMethod } from './index';
+import { Contract, ContractSendMethod, SendCallback } from './index';
 
 export interface ContractMethod {
 	<A extends any[]>(...args: A): ContractSendMethod;
@@ -24,10 +24,11 @@ export interface Opts {
 	value?: string;
 	gasPrice?: number;
 	gasLimit?: number;
+	tryCall?: boolean;
 }
 
 export interface Result<T = void> {
-	post(opts?: Opts): TransactionPromise;
+	post(opts?: Opts, cb?: SendCallback): TransactionPromise;
 	call(opts?: Opts): Promise<T>;
 	estimateGas(opts?: Opts): Promise<number>;
 	encodeABI(): string;
@@ -163,10 +164,11 @@ export default class HappyContract<T> {
 		}
 	}
 
-	private async post(method: ContractSendMethod, opts?: Opts, cb?: any) {
+	private async post(method: ContractSendMethod, {tryCall, ...opts}: Opts = {}, cb?: SendCallback) {
 		var {_queue,_web3} = this;
 
-		// await method.call(opts as any); // TODO ...
+		if (tryCall)
+			await method.call(opts as any); // try call
 		opts = opts || {};
 		opts.from = opts.from || await _web3.defaultAccount();
 		var receipt: any;

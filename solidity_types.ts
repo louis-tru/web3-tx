@@ -27,6 +27,8 @@ export class Bytes8 extends Bytes32 {}
 export class Bytes16 extends Bytes32 {}
 
 export type Uint256 = bigint;
+export type Uint120 = bigint;
+export type Uint64 = bigint;
 export type Int256 = bigint;
 export type Uint8 = number;
 export type Uint16 = number;
