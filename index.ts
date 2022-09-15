@@ -247,6 +247,7 @@ export class Contract extends ContractBase {
 					method.call = async function(opts?: any, ...args: any[]) {
 						var {from, gasPrice, gas} = opts || {};
 						try {
+							from = from || await self._host.defaultAccount();
 							return await call.call(this, {from, gasPrice, gas}, ...args);
 						} catch(err: any) {
 							_throwTxCallError(err, errno.ERR_SOLIDITY_EXEC_ERROR);
