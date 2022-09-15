@@ -37,8 +37,8 @@ import {Transaction,TransactionReceipt } from 'web3-core';
 import {BlockTransactionString as Block} from 'web3-eth';
 import {IBuffer} from 'somes/buffer';
 
-import './_fix_contract';
-import './_fix_web3';
+import './fix_contract';
+import './fix_web3';
 
 // class ContractBase extends (require('web3-eth-contract') as typeof __Contract) {};
 

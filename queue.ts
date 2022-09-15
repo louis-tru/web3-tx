@@ -88,7 +88,7 @@ export class MemoryTransactionQueue {
 				queue.list.shift();
 				await ctx.dequeue(opts);
 			} catch (err) {
-				console.warn('TransactionQueue#_dequeue', err);
+				console.warn('#TransactionQueue#_dequeue', err);
 				await utils.sleep(2e3); // sleep 1s
 			}
 			utils.nextTick(()=>this._dequeue(queue));
@@ -146,7 +146,7 @@ export class MemoryTransactionQueue {
 								reject(err);
 							}
 						} else { // force retry
-							console.warn('TransactionQueue_push_dequeue, web3 tx fail force retry *********', opts, err);
+							console.warn('#TransactionQueue#push#dequeue, web3 tx fail force retry *********', opts, err);
 							opts_.nonceTimeout = 0; // disable wait nonce Timeout
 							queue.list.unshift(item); // retry queue
 							await utils.sleep(2e3); // sleep 2s
@@ -196,7 +196,7 @@ export class MemoryTransactionQueue {
 		var nonce = curNonce;
 		while (item) {
 			var opt = item.value;
-			utils.assert(nonce == opt.nonce, 'TransactionQueue#getNonce_, nonce no match');
+			utils.assert(nonce == opt.nonce, '#TransactionQueue#getNonce_, nonce no match');
 			if (now > opt.nonceTimeout) { // pending and is timeout
 				opt.nonceTimeout = nonceTimeout; // new tomeiut
 				opt.gasPrice = opt.gasPrice ? Math.max(gasPrice, opt.gasPrice + 1): gasPrice;
