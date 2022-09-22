@@ -8,6 +8,8 @@ import {IWeb3, TransactionPromise, TransactionReceipt, EventData} from './index'
 import {MemoryTransactionQueue} from './queue';
 import {AbiItem, AbiOutput} from 'web3-utils/types';
 import { Contract, ContractSendMethod, SendCallback } from './index';
+import abi from 'web3-eth-abi';
+import buffer from 'somes/buffer';
 
 export interface ContractMethod {
 	<A extends any[]>(...args: A): ContractSendMethod;
@@ -127,6 +129,54 @@ export default class HappyContract<T> {
 		return new_data;
 	}
 
+	private _errorsSignature: Dict<{signature: string, abi: AbiItem}> | null = null;
+
+	errorsSignatures() {
+		let abis = ([] as any[]).concat(...Object.values(HappyContract._contracts).map(e=>e._info.abi));
+		if (!this._errorsSignature) {
+			this._errorsSignature = {};
+			let errors = this._errorsSignature!;
+			let signatures = abis.filter(e=>(e as any).type=='error').map((e: AbiItem)=>({signature: abi.encodeFunctionSignature(e), abi: e}));
+			for (let {signature,abi} of signatures) {
+				errors[signature] = {signature, abi};
+			}
+		}
+		return this._errorsSignature;
+	}
+
+	private async methocCall(method: ContractSendMethod, opts?: Opts) {
+		try {
+			return await method.call(opts as any);
+		} catch(err: any) {
+			let flag = 'execution reverted';
+			let idx = err.message.indexOf(flag);
+			if (idx != -1) {
+				let msg = err.message.substring(idx + flag.length);
+				try {
+					let originalError = JSON.parse(msg).originalError; /*as {
+						code: number, data: string, message: string
+					};*/
+					if (originalError) {
+						let errorsSignatures = this.errorsSignatures();
+						let data = buffer.from(originalError.data.slice(2), 'hex');
+						let signature = '0x' + data.slice(0, 4).toString('hex');
+						let mat = errorsSignatures[signature];
+						if (mat) {
+							let signatureStr = `${mat.abi.name}(${mat.abi.inputs!.map(e=>e.type).join(',')})`;
+							originalError.description = signatureStr;
+							originalError.message += ': ' + signatureStr;
+							originalError.returnValues = abi.decodeParameters(mat.abi.inputs || [], '0x' + data.slice(4).toString('hex'));
+						}
+						let child = Error.new(originalError);
+						err.originalError = child;
+						err.child = [child];
+					}
+				} catch(err){}
+			}
+			throw err;
+		}
+	}
+
 	private async abiCall(prop: string, method: ContractSendMethod, opts?: Opts) {
 		var {_web3} = this;
 		var abi = this._abis[prop];
@@ -135,7 +185,7 @@ export default class HappyContract<T> {
 		opts.from = opts.from || await _web3.defaultAccount();
 
 		// call
-		var rawOutputs = await method.call(opts as any);
+		var rawOutputs = await this.methocCall(method, opts);
 		var abiOutputs = abi.outputs as AbiOutput[];
 		var outputs = this.parseOutputs(rawOutputs, abiOutputs);
 
@@ -168,7 +218,7 @@ export default class HappyContract<T> {
 		var {_queue,_web3} = this;
 
 		if (tryCall)
-			await method.call(opts as any); // try call
+			await this.methocCall(method, opts as any); // try call
 		opts = opts || {};
 		opts.from = opts.from || await _web3.defaultAccount();
 		var receipt: any;
