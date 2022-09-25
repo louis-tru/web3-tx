@@ -136,8 +136,10 @@ export default class HappyContract<T> {
 		if (!this._errorsSignature) {
 			this._errorsSignature = {};
 			let errors = this._errorsSignature!;
-			let signatures = abis.filter(e=>(e as any).type=='error').map((e: AbiItem)=>({signature: abi.encodeFunctionSignature(e), abi: e}));
+			let signatures = abis.filter(e=>(e as any).type=='error')
+				.map((e: AbiItem)=>({signature: abi.encodeFunctionSignature(e), abi: e}));
 			for (let {signature,abi} of signatures) {
+				// if (abi.name == 'ERC20TransferGenericFailure') debugger
 				errors[signature] = {signature, abi};
 			}
 		}
