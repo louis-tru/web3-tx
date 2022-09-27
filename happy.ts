@@ -88,6 +88,10 @@ export default class HappyContract<T> {
 				break;
 			case 'int256':
 			case 'uint256':
+			case 'uint120':
+			case 'int120':
+			case 'int64':
+			case 'uint64':
 				item = BigInt(item);
 				break;
 			case 'uint8':
