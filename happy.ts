@@ -220,7 +220,7 @@ export default class HappyContract<T> {
 		}
 	}
 
-	private async post(method: ContractSendMethod, {tryCall, ...opts}: Opts = {}, cb?: SendCallback) {
+	protected async post(method: ContractSendMethod, {tryCall, ...opts}: Opts = {}, cb?: SendCallback) {
 		var {_queue,_web3} = this;
 
 		if (tryCall)
