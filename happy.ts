@@ -136,21 +136,23 @@ export default class HappyContract<T> {
 	private _errorsSignature: Dict<{signature: string, abi: AbiItem}> | null = null;
 
 	errorsSignatures() {
-		let abis = ([] as any[]).concat(...Object.values(HappyContract._contracts).map(e=>e._info.abi));
 		if (!this._errorsSignature) {
+			let abis = ([] as any[]).concat(...Object.values(HappyContract._contracts).map(e=>e._info.abi));
 			this._errorsSignature = {};
 			let errors = this._errorsSignature!;
+
 			let signatures = abis.filter(e=>(e as any).type=='error')
 				.map((e: AbiItem)=>({signature: abi.encodeFunctionSignature(e), abi: e}));
 			for (let {signature,abi} of signatures) {
 				// if (abi.name == 'ERC20TransferGenericFailure') debugger
+				// if (abi.name == 'OnlyCallByVotePool') debugger
 				errors[signature] = {signature, abi};
 			}
 		}
 		return this._errorsSignature;
 	}
 
-	private async methocCall(method: ContractSendMethod, opts?: Opts) {
+	private async methodCall(method: ContractSendMethod, opts?: Opts) {
 		try {
 			return await method.call(opts as any);
 		} catch(err: any) {
@@ -191,7 +193,7 @@ export default class HappyContract<T> {
 		opts.from = opts.from || await _web3.defaultAccount();
 
 		// call
-		var rawOutputs = await this.methocCall(method, opts);
+		var rawOutputs = await this.methodCall(method, opts);
 		var abiOutputs = abi.outputs as AbiOutput[];
 		var outputs = this.parseOutputs(rawOutputs, abiOutputs);
 
@@ -224,7 +226,7 @@ export default class HappyContract<T> {
 		var {_queue,_web3} = this;
 
 		if (tryCall)
-			await this.methocCall(method, opts as any); // try call
+			await this.methodCall(method, opts as any); // try call
 		opts = opts || {};
 		opts.from = opts.from || await _web3.defaultAccount();
 		var receipt: any;
