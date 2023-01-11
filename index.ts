@@ -89,6 +89,7 @@ function _throwTxCallError(err: Error, defaultErrno?: ErrnoCode) {
 
 async function setTx(self: IWeb3, tx: TxOptions, estimateGas?: (tx: TxOptions)=>Promise<number>) {
 	estimateGas = estimateGas || ((tx: TxOptions)=>self.eth.estimateGas(tx));
+
 	tx.from = tx.from || await self.defaultAccount();
 	tx.nonce = tx.nonce || await self.eth.getTransactionCount(tx.from);
 	tx.chainId = tx.chainId || await self.getChainId() || 0;
@@ -107,12 +108,11 @@ async function setTx(self: IWeb3, tx: TxOptions, estimateGas?: (tx: TxOptions)=>
 			} as any);
 		} catch(err: any) {
 			_throwTxCallError(err, errno.ERR_TRANSACTION_SEND_FAIL);
-			return;
 		}
 	}
 
 	if (!tx.gasLimit) // 程序运行时步数限制 default
-		tx.gasLimit = parseInt(String(tx.gas * 1.2)); // suggested gas limit
+		tx.gasLimit = parseInt(String(tx.gas! * 1.2)); // suggested gas limit
 
 	if (!tx.gasPrice) // 程序运行单步的wei数量wei default
 		tx.gasPrice = await self.gasPrice() || base.DEFAULT_GAS_PRICE;
@@ -121,9 +121,11 @@ async function setTx(self: IWeb3, tx: TxOptions, estimateGas?: (tx: TxOptions)=>
 		tx.gasPrice = Math.min(self.gasPriceLimit, tx.gasPrice);
 	}
 
+	tx.to = tx.to || null as any;
+
 	return {
 		from: tx.from,
-		to: tx.to || null,
+		to: tx.to,
 		nonce: tx.nonce,
 		chainId: tx.chainId,
 		value: tx.value,
@@ -207,48 +209,53 @@ export class Contract extends ContractBase {
 		// TODO extend method signedTransaction() and sendSignedTransaction()
 		jsonInterface.forEach(function({ name, type }) {
 			if (name && type == 'function') {
-				var { methods } = self;
-				var raw = methods[name];
+				let { methods } = self;
+				let raw = methods[name];
 
 				methods[name] = (...args: any[])=>{
-					var method = raw.call(methods, ...args) as base.ContractSendMethod;
-					var call = method.call;
+					let method = raw.call(methods, ...args) as base.ContractSendMethod;
+					let call = method.call;
 					method.signTx = e=>signTx(method, e);
+
 					method.post = async (e, cb)=>{
-						var opts = e || {};
+						let opts = e || {};
 						if (self._host.sign) {
-							var tx = await signTx(method, opts);
+							let tx = await signTx(method, opts);
 							return await self._host.sendSignedTransaction(tx.data, opts, cb);
 						} else {
-							Object.assign(opts, { to: address, data: method.encodeABI() });
-							await setTx(self._host, opts, (tx)=>method.estimateGas(tx));
-							try {
+							return await method.send(opts, cb);
+						}
+					};
+
+					(method as any).send_ = method.send;
+
+					method.send = async (opts,cb)=>{
+						opts = Object.assign(opts || {}, { to: address, data: method.encodeABI() });
+						await setTx(self._host, opts, (tx)=>method.estimateGas(tx));
+						try {
+							return await self._host.sendTransaction(opts, cb);
+						} catch(err: any) {
+							if (err.message.indexOf('not a string') != -1) { // Compatible with metamask
+								opts.nonce = String(opts.nonce) as any;
+								opts.gasLimit = '0x' + opts.gasLimit!.toString(16) as any;
+								opts.gas = '0x' + opts.gas!.toString(16) as any;
+								opts.gasPrice = '0x' + opts.gasPrice!.toString(16) as any;
 								return await self._host.sendTransaction(opts, cb);
-							} catch(err: any) {
-								if (err.message.indexOf('not a string') != -1) { // Compatible with metamask
-									opts.nonce = String(opts.nonce) as any;
-									opts.gasLimit = '0x' + opts.gasLimit!.toString(16) as any;
-									opts.gas = '0x' + opts.gas!.toString(16) as any;
-									opts.gasPrice = '0x' + opts.gasPrice!.toString(16) as any;
-									return await self._host.sendTransaction(opts, cb);
-								} else {
-									throw err;
-								}
+							} else {
+								throw err;
 							}
 						}
 					};
 
-					method.sendRaw = async (e,cb)=>{
-						var opts = e || {};
-						await setTx(self._host, opts, (tx)=>method.estimateGas(tx));
-						return await self._host.sendTransaction(opts, cb);
-					};
-
-					method.call = async function(opts?: any, ...args: any[]) {
-						var {from, gasPrice, gas, value} = opts || {};
+					method.call = async function(opts?: any, cb?: any, blockBumber?: any) {
+						if (typeof opts == 'number') {
+							blockBumber = opts;
+							opts = {};
+						}
+						let {from, gasPrice, gas, value} = opts || {};
 						try {
-							from = from || await self._host.defaultAccount();
-							return await call.call(this, {from, gasPrice, gas, value} as any, ...args);
+							// from = from || await self._host.defaultAccount() || undefined;
+							return await call.call(this, {from, gasPrice, gas, value} as any, ...[cb, blockBumber]);
 						} catch(err: any) {
 							_throwTxCallError(err, errno.ERR_SOLIDITY_EXEC_ERROR);
 						}

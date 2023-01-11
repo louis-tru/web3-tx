@@ -32,8 +32,8 @@ import __Web3 from 'web3';
 import { JsonRpcPayload, JsonRpcResponse } from 'web3-core-helpers';
 import * as base from './base';
 import {Contract as __Contract, Options as ContractOptions, 
-	EventData, CallOptions, SendOptions, ContractSendMethod as ContractSendMethodRaw } from 'web3-eth-contract';
-import {Transaction,TransactionReceipt } from 'web3-core';
+	EventData, CallOptions, SendOptions, ContractSendMethod as ContractSendMethodRaw, EstimateGasOptions } from 'web3-eth-contract';
+import {Transaction,TransactionReceipt, BlockNumber } from 'web3-core';
 import {BlockTransactionString as Block} from 'web3-eth';
 import {IBuffer} from 'somes/buffer';
 
@@ -87,13 +87,25 @@ export interface SerializedTx {
 	hash: IBuffer;
 }
 
-export interface ContractSendMethod extends ContractSendMethodRaw {
+export interface ContractSendMethod {
 	/**
 	 * returns serializedTx
 	 */
 	signTx(opts?: TxOptions): Promise<SerializedTx>;
 	post(opts?: TxOptions, cb?: SendCallback): TransactionPromise;
-	sendRaw(opts?: TxOptions, cb?: SendCallback): TransactionPromise;
+	send(opts?: TxOptions, cb?: SendCallback): TransactionPromise;
+
+	call(opts?: CallOptions, cb?: (err: Error, result: any) => void, blockNumber?: BlockNumber): Promise<any>;
+	call(opts?: CallOptions, blockNumber?: BlockNumber): Promise<any>;
+	call(blockNumber?: number, cb?: (err: Error, result: any) => void): Promise<any>;
+
+	estimateGas(opts: EstimateGasOptions, cb?: (err: Error, gas: number) => void): Promise<number>;
+	estimateGas(cb: (err: Error, gas: number) => void): Promise<number>;
+	estimateGas(opts: EstimateGasOptions, cb: (err: Error, gas: number) => void): Promise<number>;
+	estimateGas(opts: EstimateGasOptions): Promise<number>;
+	estimateGas(): Promise<number>;
+
+	encodeABI(): string;
 }
 
 export interface ContractMethod {
