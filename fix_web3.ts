@@ -5,6 +5,37 @@
 
 import 'somes';
 import errno from './errno';
+import * as utils from 'web3-utils';
+import {formatters} from 'web3-core-helpers';
+import {TransactionReceipt} from 'web3-core';
+
+formatters.outputTransactionReceiptFormatter = function(receipt: TransactionReceipt) {
+	if (typeof receipt !== 'object') {
+		throw new Error('Received receipt is invalid: ' + receipt);
+	}
+	if (!(this as any).hexFormat) {
+		if (receipt.blockNumber !== null)
+			receipt.blockNumber = utils.hexToNumber(receipt.blockNumber);
+		if (receipt.transactionIndex !== null)
+			receipt.transactionIndex = utils.hexToNumber(receipt.transactionIndex);
+		receipt.cumulativeGasUsed = utils.hexToNumber(receipt.cumulativeGasUsed);
+		receipt.gasUsed = utils.hexToNumber(receipt.gasUsed);
+		if (receipt.effectiveGasPrice) {
+			// Fix: Error: Number can only safely store up to 53 bits
+			receipt.effectiveGasPrice = Number(receipt.effectiveGasPrice); //utils.hexToNumber(receipt.effectiveGasPrice);
+		}
+	}
+	if (Array.isArray(receipt.logs)) {
+		receipt.logs = receipt.logs.map(formatters.outputLogFormatter);
+	}
+	if (receipt.contractAddress) {
+		receipt.contractAddress = utils.toChecksumAddress(receipt.contractAddress);
+	}
+	if (typeof receipt.status !== 'undefined' && receipt.status !== null) {
+		receipt.status = Boolean(parseInt(receipt.status as any));
+	}
+	return receipt;
+};
 
 function ConnectionTimeout(timeout: any) {
 	return Error.new(errno.ERR_RPC_REQUEST_TIMEOUT).ext({timeout});
