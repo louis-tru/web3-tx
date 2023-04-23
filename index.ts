@@ -248,8 +248,8 @@ export class Contract extends ContractBase {
 					};
 
 					method.call = async function(opts?: any, cb?: any, blockBumber?: any) {
-						if (typeof opts == 'number') {
-							blockBumber = opts;
+						if (typeof opts == 'number' || typeof opts == 'string') {
+							blockBumber = opts || 'latest';
 							opts = {};
 						}
 						let {from, gasPrice, gas, value} = opts || {};

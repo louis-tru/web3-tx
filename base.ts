@@ -97,7 +97,7 @@ export interface ContractSendMethod {
 
 	call(opts?: CallOptions, cb?: (err: Error, result: any) => void, blockNumber?: BlockNumber): Promise<any>;
 	call(opts?: CallOptions, blockNumber?: BlockNumber): Promise<any>;
-	call(blockNumber?: number, cb?: (err: Error, result: any) => void): Promise<any>;
+	call(blockNumber?: number | 'latest' | 'pending' | 'earliest' | 'genesis', cb?: (err: Error, result: any) => void): Promise<any>;
 
 	estimateGas(opts: EstimateGasOptions, cb?: (err: Error, gas: number) => void): Promise<number>;
 	estimateGas(cb: (err: Error, gas: number) => void): Promise<number>;
