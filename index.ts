@@ -74,10 +74,12 @@ class TxSigner {
 function _throwTxCallError(err: Error, defaultErrno?: ErrnoCode) {
 	if (err.message) {
 		var msg = err.message.toLowerCase();
-		if (msg.indexOf('insufficient funds') != -1) {
-			err.errno = errno.ERR_INSUFFICIENT_FUNDS_FOR_TX[0];
-		} else if (msg.indexOf('execution reverted') != -1) {
+		if (msg.indexOf('execution reverted') != -1) { // call exec reverted
 			err.errno = errno.ERR_EXECUTION_REVERTED[0];
+		} else if (msg.indexOf("returned values aren't valid") != -1) { // call exec error
+			err.errno = errno.ERR_EXECUTION_Returned_Values_Invalid[0];
+		} else if (msg.indexOf('insufficient funds') != -1) {
+			err.errno = errno.ERR_INSUFFICIENT_FUNDS_FOR_TX[0];
 		} else if (msg.indexOf('gas required exceeds allowance') != -1) { // gas required exceeds allowance (8000000)
 			err.errno = errno.ERR_GAS_REQUIRED_LIMIT[0];
 		} else if (!err.httpErr && defaultErrno) { //

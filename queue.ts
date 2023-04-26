@@ -129,7 +129,8 @@ export class MemoryTransactionQueue {
 							errno.ERR_TRANSACTION_STATUS_FAIL, // fail
 							errno.ERR_TRANSACTION_SEND_FAIL, // send tx fail
 							errno.ERR_TRANSACTION_INVALID,    // invalid
-							errno.ERR_EXECUTION_REVERTED, // exec fail
+							errno.ERR_EXECUTION_REVERTED, // call exec reverted
+							errno.ERR_EXECUTION_Returned_Values_Invalid,
 							errno.ERR_SOLIDITY_EXEC_ERROR, // exec fail
 							errno.ERR_INSUFFICIENT_FUNDS_FOR_TX, // insufficient funds for transaction
 							errno.ERR_TRANSACTION_BLOCK_RANGE_LIMIT, // block limit
