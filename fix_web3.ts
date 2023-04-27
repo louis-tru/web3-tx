@@ -15,11 +15,11 @@ formatters.outputTransactionReceiptFormatter = function(receipt: TransactionRece
 	}
 	if (!(this as any).hexFormat) {
 		if (receipt.blockNumber !== null)
-			receipt.blockNumber = utils.hexToNumber(receipt.blockNumber);
+			receipt.blockNumber = Number(utils.hexToNumber(receipt.blockNumber));
 		if (receipt.transactionIndex !== null)
-			receipt.transactionIndex = utils.hexToNumber(receipt.transactionIndex);
-		receipt.cumulativeGasUsed = utils.hexToNumber(receipt.cumulativeGasUsed);
-		receipt.gasUsed = utils.hexToNumber(receipt.gasUsed);
+			receipt.transactionIndex = Number(utils.hexToNumber(receipt.transactionIndex));
+		receipt.cumulativeGasUsed = Number(utils.hexToNumber(receipt.cumulativeGasUsed));
+		receipt.gasUsed = Number(utils.hexToNumber(receipt.gasUsed));
 		if (receipt.effectiveGasPrice) {
 			// Fix: Error: Number can only safely store up to 53 bits
 			receipt.effectiveGasPrice = Number(receipt.effectiveGasPrice); //utils.hexToNumber(receipt.effectiveGasPrice);
