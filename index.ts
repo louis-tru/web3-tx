@@ -38,6 +38,7 @@ import { Eth } from 'web3-eth';
 import {AbiItem} from 'web3-utils';
 import { MultipleProvider, Provider } from './provider';
 import {Signature} from 'crypto-tx/sign';
+import {ITransactionSigner} from 'crypto-tx/tx';
 
 export * from './base';
 export * from './provider';
@@ -53,7 +54,7 @@ type SendCallback = base.SendCallback;
 type TransactionPromise = base.TransactionPromise;
 type SerializedTx = base.SerializedTx;
 
-class TxSigner {
+export class Signer implements ITransactionSigner {
 	private _account: string;
 	private _host: IWeb3;
 	constructor(host: IWeb3, account: string) {
@@ -65,7 +66,7 @@ class TxSigner {
 			throw Error.new(errno.ERR_IWEB3_SIGN_NOT_IMPL);
 		var signature = await this._host.sign(buffer.from(message), this._account);
 		return {
-			signature: Buffer.from(signature.signature),
+			signature: signature.signature,
 			recovery: signature.recovery,
 		};
 	}
@@ -152,7 +153,7 @@ export interface IWeb3 {
 	getBlockNumber(): Promise<number>;
 	getNonce(account?: string): Promise<number>;
 	sign?(message: IBuffer, account?: string): Promise<Signature> | Signature;
-	signTx(opts?: TxOptions): Promise<SerializedTx>;
+	signTx(opts?: TxOptions, signer?: Signer): Promise<SerializedTx>;
 }
 
 export interface Contract extends ContractBase {
@@ -454,7 +455,7 @@ export class Web3 implements IWeb3 {
 	private _watching = false;
 
 	private async _checkTransaction(txid: string, opts?: TxOptions) {
-		return utils.promise<any>(async (resolve, reject)=>{
+		return utils.promise<TransactionReceipt>(async (resolve, reject)=>{
 			utils.assert(txid, 'Bad argument. txid cannot empty');
 			opts = opts || {};
 			var blockNumber = 0;
@@ -579,7 +580,7 @@ export class Web3 implements IWeb3 {
 	/**
 	 * @func signTx(param) 对交易进行签名
 	 */
-	async signTx(opts?: TxOptions): Promise<SerializedTx> {
+	async signTx(opts?: TxOptions, signer?: ITransactionSigner): Promise<SerializedTx> {
 		if (opts) {
 			for (var [key,val] of Object.entries(opts)) {
 				if (val === undefined || val === null || val === '')
@@ -592,7 +593,7 @@ export class Web3 implements IWeb3 {
 
 		console.log('signTx, TxOptions =', opts);
 
-		var tx = await crypto_tx.signTx(new TxSigner(this, opts.from as string), opts_);
+		var tx = await crypto_tx.signTx(signer || new Signer(this, opts.from as string), opts_);
 
 		return {
 			data: buffer.from(tx.serializedTx),

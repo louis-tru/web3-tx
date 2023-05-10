@@ -93,7 +93,7 @@ export interface ContractSendMethod {
 	 */
 	signTx(opts?: TxOptions): Promise<SerializedTx>;
 	post(opts?: TxOptions, cb?: SendCallback): TransactionPromise;
-	send(opts?: TxOptions, cb?: SendCallback): TransactionPromise;
+	send(opts?: TxOptions, cb?: SendCallback): TransactionPromise; // default send method
 
 	call(opts?: CallOptions, cb?: (err: Error, result: any) => void, blockNumber?: BlockNumber): Promise<any>;
 	call(opts?: CallOptions, blockNumber?: BlockNumber): Promise<any>;
