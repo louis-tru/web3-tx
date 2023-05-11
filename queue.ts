@@ -126,15 +126,15 @@ export class MemoryTransactionQueue {
 					} catch(err: any) {
 						var opts_ = opts as DeOptionsInl;
 						var errnos: ErrnoCode[] = [
+							errno.ERR_EXECUTION_REVERTED, // call exec reverted
+							errno.ERR_EXECUTION_REVERTED_Values_Invalid,
+							errno.ERR_EXECUTION_CALL_FAIL, // exec fail
 							errno.ERR_TRANSACTION_STATUS_FAIL, // fail
 							errno.ERR_TRANSACTION_SEND_FAIL, // send tx fail
 							errno.ERR_TRANSACTION_INVALID,    // invalid
-							errno.ERR_EXECUTION_REVERTED, // call exec reverted
-							errno.ERR_EXECUTION_Returned_Values_Invalid,
-							errno.ERR_SOLIDITY_EXEC_ERROR, // exec fail
-							errno.ERR_INSUFFICIENT_FUNDS_FOR_TX, // insufficient funds for transaction
+							errno.ERR_TRANSACTION_INSUFFICIENT_FUNDS, // insufficient funds for transaction
 							errno.ERR_TRANSACTION_BLOCK_RANGE_LIMIT, // block limit
-							errno.ERR_GAS_REQUIRED_LIMIT, // gas limit
+							errno.ERR_TRANSACTION_GAS_LIMIT, // gas limit
 							errno.ERR_TRANSACTION_TIMEOUT, // timeout
 						];
 						if ( errnos.find(([e])=>err.errno==e) ) {
@@ -142,7 +142,7 @@ export class MemoryTransactionQueue {
 								console.warn(err);
 								queue.list.push(item); // retry back
 							} else {
-								if (err.errno != errno.ERR_INSUFFICIENT_FUNDS_FOR_TX[0])
+								if (err.errno != errno.ERR_TRANSACTION_INSUFFICIENT_FUNDS[0])
 									opts_.nonceTimeout = Date.now() + 3e4; // wait 30s
 								reject(err);
 							}

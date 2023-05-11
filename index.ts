@@ -63,7 +63,7 @@ export class Signer implements ITransactionSigner {
 	}
 	async sign(message: IBuffer) {
 		if (!this._host.sign)
-			throw Error.new(errno.ERR_IWEB3_SIGN_NOT_IMPL);
+			throw Error.new(errno.ERR_WEB3_SIGN_NOT_IMPL);
 		var signature = await this._host.sign(buffer.from(message), this._account);
 		return {
 			signature: signature.signature,
@@ -75,15 +75,17 @@ export class Signer implements ITransactionSigner {
 function _throwTxCallError(err: Error, defaultErrno?: ErrnoCode) {
 	if (err.message) {
 		var msg = err.message.toLowerCase();
-		if (msg.indexOf('execution reverted') != -1) { // call exec reverted
+		if (msg.indexOf('execution reverted') != -1) { // exec reverted
 			err.errno = errno.ERR_EXECUTION_REVERTED[0];
-		} else if (msg.indexOf("returned values aren't valid") != -1) { // call exec error
-			err.errno = errno.ERR_EXECUTION_Returned_Values_Invalid[0];
+		} else if (msg.indexOf("returned values aren't valid") != -1) { // exec reverted values aren't valid
+			err.errno = errno.ERR_EXECUTION_REVERTED_Values_Invalid[0];
 		} else if (msg.indexOf('insufficient funds') != -1) {
-			err.errno = errno.ERR_INSUFFICIENT_FUNDS_FOR_TX[0];
+			err.errno = errno.ERR_TRANSACTION_INSUFFICIENT_FUNDS[0];
 		} else if (msg.indexOf('gas required exceeds allowance') != -1) { // gas required exceeds allowance (8000000)
-			err.errno = errno.ERR_GAS_REQUIRED_LIMIT[0];
-		} else if (!err.httpErr && defaultErrno) { //
+			err.errno = errno.ERR_TRANSACTION_GAS_LIMIT[0];
+		} else if (err.httpErr) { //
+			err.errno = errno.ERR_WEB3_RPC_NETWORK_ERROR[0];
+		} else if (defaultErrno) {
 			err.errno = defaultErrno[0];
 		}
 	}
@@ -260,7 +262,7 @@ export class Contract extends ContractBase {
 							// from = from || await self._host.defaultAccount() || undefined;
 							return await call.call(this, {from, gasPrice, gas, value} as any, ...[cb, blockBumber]);
 						} catch(err: any) {
-							_throwTxCallError(err, errno.ERR_SOLIDITY_EXEC_ERROR);
+							_throwTxCallError(err, errno.ERR_EXECUTION_CALL_FAIL);
 						}
 					};
 					return method;
@@ -605,9 +607,9 @@ export class Web3 implements IWeb3 {
 		try {
 			var txid = await this.request('eth_sendRawTransaction', ['0x' + tx.toString('hex')]);
 		} catch(err: any) {
-			_throwTxCallError(err);
+			_throwTxCallError(err, errno.ERR_TRANSACTION_SEND_FAIL);
 		}
-		utils.assert(txid, errno.ERR_SEND_RAW_TRANSACTION_FAIL);
+		utils.assert(txid, errno.ERR_TRANSACTION_SEND_FAIL);
 		return txid;
 	}
 
@@ -619,9 +621,9 @@ export class Web3 implements IWeb3 {
 		try {
 			var txid = await this.request('eth_sendTransaction', [tx_]);
 		} catch(err: any) {
-			_throwTxCallError(err);
+			_throwTxCallError(err, errno.ERR_TRANSACTION_SEND_FAIL);
 		}
-		utils.assert(txid, errno.ERR_SEND_RAW_TRANSACTION_FAIL);
+		utils.assert(txid, errno.ERR_TRANSACTION_SEND_FAIL);
 		if (cb)
 			await cb(txid, tx);
 		return this._checkTransaction(txid, tx);

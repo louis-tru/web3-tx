@@ -38,7 +38,7 @@ formatters.outputTransactionReceiptFormatter = function(receipt: TransactionRece
 };
 
 function ConnectionTimeout(timeout: any) {
-	return Error.new(errno.ERR_RPC_REQUEST_TIMEOUT).ext({timeout});
+	return Error.new(errno.ERR_WEB3_RPC_REQUEST_TIMEOUT).ext({timeout});
 }
 
 function InvalidResponse(result: any) {
@@ -54,7 +54,7 @@ function ErrorResponse(result: any) {
 	var err = result.error ? result.error: result;
 	err.errno = err.code || -30000;
 	if (err.errno == -32065) { // timeout
-		err.errno = errno.ERR_RPC_REQUEST_TIMEOUT[0];
+		err.errno = errno.ERR_WEB3_RPC_REQUEST_TIMEOUT[0];
 		return Error.new(err);
 	} else {
 		return Error.new(err);
