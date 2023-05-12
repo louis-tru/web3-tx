@@ -29,11 +29,9 @@
  * ***** END LICENSE BLOCK ***** */
 
 import utils from 'somes';
-import errno from 'somes/errno';
 import req from 'somes/request';
 import * as net from 'net';
 import * as zlib from 'zlib';
-import errno_web3 from './errno';
 import {RequestArguments } from 'web3-core';
 import {errors,JsonRpcPayload, JsonRpcResponse,
 	HttpProviderBase,HttpProviderOptions} from 'web3-core-helpers';
@@ -56,11 +54,13 @@ export enum MPSwitchMode {
 class HttpProvider implements HttpProviderBase {
 	readonly host: string;
 	readonly connected = false;
-	readonly options: HttpProviderOptions;
+	readonly options: HttpProviderOptions & {logs?: number};
+	readonly logs: number; // print logs
 
 	constructor(host: string, opts?:HttpProviderOptions) {
 		this.host = host;
 		this.options = opts || {};
+		this.logs = this.options.logs || 0;
 	}
 	send(payload: JsonRpcPayload, callback: (error: Error | null, result?: JsonRpcResponse)=>void) {
 		this.request(payload).then(e=>callback(null, e)).catch(callback);
@@ -81,6 +81,7 @@ class HttpProvider implements HttpProviderBase {
 				params: payload, method: 'POST', dataType: 'json',
 				headers: headers,
 				timeout: this.options.timeout,
+				logs: !!this.logs,
 			});
 			let encoding = response.headers['content-encoding'];
 			if (encoding && encoding.indexOf('gzip') != -1) { // unzip
@@ -119,10 +120,10 @@ export class MultipleProvider implements BaseProvider {
 	private _switchMode: MPSwitchMode;
 	private _providerIndex = 0;
 
-	printLog = false;
+	logs: number = 0; // print logs
 
 	constructor(provider: Provider | Provider[], priority?: number[], mode?: MPSwitchMode) {
-		var _priority = priority || [];
+		var priority_ = priority || [];
 		this._BaseProvider = (Array.isArray(provider) ? provider : [provider]).map((provider: any, j)=>{
 			var { WebsocketProvider, IpcProvider } = Web3Raw.providers;
 			var baseProvider: BaseProvider = provider;
@@ -136,8 +137,8 @@ export class MultipleProvider implements BaseProvider {
 					priority = Number(m[1]) || 1;
 					provider = provider.substring(m[0].length);
 				}
-				if (_priority[j]) {
-					priority = Number(_priority[j]) || priority;
+				if (priority_[j]) {
+					priority = Number(priority_[j]) || priority;
 				}
 
 				if (/^https?:/.test(provider)) { // http
@@ -152,7 +153,7 @@ export class MultipleProvider implements BaseProvider {
 				Object.assign(baseProvider, { rpc: provider });
 
 			} else {
-				var priority = Number(_priority[j]) || 1;
+				var priority = Number(priority_[j]) || 1;
 			}
 
 			return { provider: baseProvider, priority };
@@ -220,8 +221,13 @@ export class MultipleProvider implements BaseProvider {
 	send(payload: JsonRpcPayload, callback: RpcCallback): void {
 		var provider = this.baseProvider;
 		var rpc = provider.rpc;
-		if (this.printLog)
-			console.log('send rpc =>', provider.rpc, payload);
+		if (this.logs) {
+			if (this.logs > 1) {
+				(provider as any).logs = 2;
+			} else {
+				console.log('send rpc =>', provider.rpc, payload);
+			}
+		}
 		provider.send(payload, (error?: Error, result?: JsonRpcResponse)=>{
 			if (error) {
 				callback(Error.new(error).ext({ httpErr: true }));
