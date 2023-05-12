@@ -195,6 +195,10 @@ export class MultipleProvider implements BaseProvider {
 		return this._providerIndex;
 	}
 
+	baseProviderAt(idx: number) {
+		return this._BaseProvider[idx];
+	}
+
 	setProviderIndex(idx: number) {
 		idx = Number(idx) || 0;
 		utils.assert(idx < this._BaseProvider.length, 'no provider available');
@@ -218,8 +222,8 @@ export class MultipleProvider implements BaseProvider {
 		this.send(payload, callback);
 	}
 
-	send(payload: JsonRpcPayload, callback: RpcCallback): void {
-		var provider = this.baseProvider;
+	send(payload: JsonRpcPayload, callback: RpcCallback, idx?: number): void {
+		var provider = idx === undefined ? this.baseProvider: this._BaseProvider[idx].provider;
 		var rpc = provider.rpc;
 		if (this.logs) {
 			if (this.logs > 1) {
@@ -249,7 +253,7 @@ export class MultipleProvider implements BaseProvider {
 		// child impl
 	}
 
-	request<T = any>(args: RequestArguments): Promise<T> {
+	request<T = any>(args: RequestArguments, idx?: number): Promise<T> {
 		var payload: JsonRpcPayload = {
 			jsonrpc: '2.0',
 			method: args.method,
