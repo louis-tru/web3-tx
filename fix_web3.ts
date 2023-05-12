@@ -4,6 +4,7 @@
  */
 
 import 'somes';
+import errno_ from 'somes/errno';
 import errno from './errno';
 import * as utils from 'web3-utils';
 import {formatters} from 'web3-core-helpers';
@@ -42,76 +43,24 @@ function ConnectionTimeout(timeout: any) {
 }
 
 function InvalidResponse(result: any) {
-	// var message = !!result && !!result.error && !!result.error.message ? 
-	// result.error.message : 'Invalid JSON RPC response: ' + JSON.stringify(result);
 	return Error.new(errno.ERR_WEB3_RPC_INVALID_RESPONSE).ext({response: result});
 }
 
 function ErrorResponse(result: any) {
-	// var message = !!result && !!result.error && !!result.error.message ? 
-	// 	result.error.message : JSON.stringify(result);
 	result = result || {};
-	var err = result.error ? result.error: result;
+	let err = result.error ? result.error: result;
 	err.errno = err.code || -30000;
+
 	if (err.errno == -32065) { // timeout
 		err.errno = errno.ERR_WEB3_RPC_REQUEST_TIMEOUT[0];
-		return Error.new(err);
-	} else {
-		return Error.new(err);
+	} if (err.errno == errno_.ERR_HTTP_REQUEST_TIMEOUT[0]) { 
+		err.errno = errno.ERR_WEB3_RPC_REQUEST_TIMEOUT[0];
 	}
+	return Error.new(err);
 }
 
-function sendOld(this: any, payload: any, callback: (err?: any, data?: any)=>void) {
-	var _this = this;
-	var request = this._prepareRequest();
-	var complete = false;
-
-	request.onreadystatechange = function() {
-		if (request.readyState === 4 && request.timeout !== 1) {
-			if (complete) return;
-			complete = true;
-			var result = request.responseText;
-			var error = null;
-			try {
-				result = JSON.parse(result);
-			} catch(e) {
-				error = errors.InvalidResponse(request.responseText);
-			}
-			_this.connected = true;
-			callback(error, result);
-		}
-	};
-
-	request.onloadend = function() {
-		if (complete) return;
-		complete = true;
-		var result = request.responseText;
-		var error = null;
-		try {
-			result = JSON.parse(result);
-		} catch(e) {
-			error = errors.InvalidResponse(request.responseText);
-		}
-		_this.connected = true;
-		callback(error, result);
-	};
-
-	request.ontimeout = function() {
-		complete = true;
-		_this.connected = false;
-		callback(errors.ConnectionTimeout(this.timeout));
-	};
-
-	try {
-		request.send(JSON.stringify(payload));
-	} catch(error) {
-		this.connected = false;
-		callback(errors.InvalidConnection(this.host));
-	}
-};
-
 var errors = require('web3-core-helpers').errors;
-var HttpProvider = require('web3-providers-http');
+// var HttpProvider = require('web3-providers-http');
 
 errors.ConnectionTimeout = ConnectionTimeout;
 errors.InvalidResponse = InvalidResponse;

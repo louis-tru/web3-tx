@@ -29,9 +29,14 @@
  * ***** END LICENSE BLOCK ***** */
 
 import utils from 'somes';
+import errno from 'somes/errno';
+import req from 'somes/request';
 import * as net from 'net';
+import * as zlib from 'zlib';
+import errno_web3 from './errno';
 import {RequestArguments } from 'web3-core';
-import { JsonRpcPayload, JsonRpcResponse } from 'web3-core-helpers';
+import {errors,JsonRpcPayload, JsonRpcResponse,
+	HttpProviderBase,HttpProviderOptions} from 'web3-core-helpers';
 import {TRANSACTION_REQUEST_TIMEOUT, Web3Raw, RpcCallback} from './base';
 
 export { JsonRpcPayload, JsonRpcResponse };
@@ -48,6 +53,66 @@ export enum MPSwitchMode {
 	kFixed
 }
 
+class HttpProvider implements HttpProviderBase {
+	readonly host: string;
+	readonly connected = false;
+	readonly options: HttpProviderOptions;
+
+	constructor(host: string, opts?:HttpProviderOptions) {
+		this.host = host;
+		this.options = opts || {};
+	}
+	send(payload: JsonRpcPayload, callback: (error: Error | null, result?: JsonRpcResponse)=>void) {
+		this.request(payload).then(e=>callback(null, e)).catch(callback);
+	}
+	sendAsync(payload: JsonRpcPayload, callback: (error: Error | null, result?: JsonRpcResponse)=>void) {
+		this.request(payload).then(e=>callback(null, e)).catch(callback);
+	}
+	async request(payload: JsonRpcPayload) {
+		let headers: Dict = {
+			'Accept-Encoding': 'gzip, deflate, br', // use gzip
+		};
+		for (let {name,value} of this.options.headers || []) {
+			headers[name] = value;
+		}
+		let jsonStr = '';
+		try {
+			let response = await req.request(this.host, {
+				params: payload, method: 'POST', dataType: 'json',
+				headers: headers,
+				timeout: this.options.timeout,
+			});
+			let encoding = response.headers['content-encoding'];
+			if (encoding && encoding.indexOf('gzip') != -1) { // unzip
+				let data = await new Promise<Buffer>((resolve,reject)=>{
+					zlib.unzip(response.data, function (error, data) {
+						error ? reject(error): resolve(data);
+					});
+				});
+				jsonStr = data.toString('utf-8');
+			} else {
+				jsonStr = response.data.toString('utf-8');
+			}
+		} catch(err:any) {
+			throw errors.ErrorResponse(err);
+		}
+
+		let result;
+		try {
+			result = JSON.parse(jsonStr);
+		} catch(e:any) {
+			throw errors.InvalidResponse(Error.new(e).ext({response:jsonStr}));
+		}
+		return result;
+	}
+	supportsSubscriptions() {
+		return false;
+	}
+	disconnect() {
+		return false;
+	}
+}
+
 export class MultipleProvider implements BaseProvider {
 	private _SendId = utils.getId();
 	private _BaseProvider: { provider: BaseProvider, priority: number }[];
@@ -59,7 +124,7 @@ export class MultipleProvider implements BaseProvider {
 	constructor(provider: Provider | Provider[], priority?: number[], mode?: MPSwitchMode) {
 		var _priority = priority || [];
 		this._BaseProvider = (Array.isArray(provider) ? provider : [provider]).map((provider: any, j)=>{
-			var { HttpProvider, WebsocketProvider, IpcProvider } = Web3Raw.providers;
+			var { WebsocketProvider, IpcProvider } = Web3Raw.providers;
 			var baseProvider: BaseProvider = provider;
 
 			if (typeof provider == 'string') {
@@ -162,6 +227,7 @@ export class MultipleProvider implements BaseProvider {
 				callback(Error.new(error).ext({ httpErr: true }));
 			} else if (result) {
 				this.onResult(result, rpc);
+
 				if (result.error) {
 					callback(Error.new(result.error));
 				} else {
