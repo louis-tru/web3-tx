@@ -30,12 +30,15 @@
 
 import utils from 'somes';
 import req from 'somes/request';
-import * as net from 'net';
-import * as zlib from 'zlib';
 import {RequestArguments } from 'web3-core';
 import {errors,JsonRpcPayload, JsonRpcResponse,
 	HttpProviderBase,HttpProviderOptions} from 'web3-core-helpers';
 import {TRANSACTION_REQUEST_TIMEOUT, Web3Raw, RpcCallback} from './base';
+
+if (utils.haveNode) {
+	var net  = require('net');
+	var zlib  = require('zlib');
+}
 
 export { JsonRpcPayload, JsonRpcResponse };
 
@@ -84,9 +87,9 @@ class HttpProvider implements HttpProviderBase {
 				logs: !!this.logs,
 			});
 			let encoding = response.headers['content-encoding'];
-			if (encoding && encoding.indexOf('gzip') != -1) { // unzip
+			if (encoding && encoding.indexOf('gzip') != -1 && utils.haveNode) { // unzip
 				let data = await new Promise<Buffer>((resolve,reject)=>{
-					zlib.unzip(response.data, function (error, data) {
+					zlib.unzip(response.data, function (error: any, data: any) {
 						error ? reject(error): resolve(data);
 					});
 				});
