@@ -259,8 +259,8 @@ export class Contract extends ContractBase {
 						}
 						let {from, gasPrice, gas, value} = opts || {};
 						try {
-							// from = from || await self._host.defaultAccount() || undefined;
-							return await call.call(this, {from, gasPrice, gas, value} as any, ...[cb, blockBumber]);
+							let args = [{from, gasPrice, gas, value},cb, blockBumber].filter(e=>e!==undefined);
+							return await call.call(this, ...args);
 						} catch(err: any) {
 							_throwTxCallError(err, errno.ERR_EXECUTION_CALL_FAIL);
 						}
