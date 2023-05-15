@@ -37,7 +37,6 @@ import {TRANSACTION_REQUEST_TIMEOUT, Web3Raw, RpcCallback} from './base';
 
 if (utils.haveNode) {
 	var net  = require('net');
-	var zlib  = require('zlib');
 }
 
 export { JsonRpcPayload, JsonRpcResponse };
@@ -86,17 +85,7 @@ class HttpProvider implements HttpProviderBase {
 				timeout: this.options.timeout,
 				logs: !!this.logs,
 			});
-			let encoding = response.headers['content-encoding'];
-			if (encoding && encoding.indexOf('gzip') != -1 && utils.haveNode) { // unzip
-				let data = await new Promise<Buffer>((resolve,reject)=>{
-					zlib.unzip(response.data, function (error: any, data: any) {
-						error ? reject(error): resolve(data);
-					});
-				});
-				jsonStr = data.toString('utf-8');
-			} else {
-				jsonStr = response.data.toString('utf-8');
-			}
+			jsonStr = response.data.toString('utf-8');
 		} catch(err:any) {
 			throw errors.ErrorResponse(err);
 		}
