@@ -21,9 +21,9 @@ formatters.outputTransactionReceiptFormatter = function(receipt: TransactionRece
 			receipt.transactionIndex = Number(utils.hexToNumber(receipt.transactionIndex));
 		receipt.cumulativeGasUsed = Number(utils.hexToNumber(receipt.cumulativeGasUsed));
 		receipt.gasUsed = Number(utils.hexToNumber(receipt.gasUsed));
-		if (receipt.effectiveGasPrice) {
+		if ((receipt as any).effectiveGasPrice) {
 			// Fix: Error: Number can only safely store up to 53 bits
-			receipt.effectiveGasPrice = Number(receipt.effectiveGasPrice); //utils.hexToNumber(receipt.effectiveGasPrice);
+			(receipt as any).effectiveGasPrice = Number((receipt as any).effectiveGasPrice); //utils.hexToNumber(receipt.effectiveGasPrice);
 		}
 	}
 	if (Array.isArray(receipt.logs)) {
