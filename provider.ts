@@ -226,7 +226,7 @@ export class MultipleProvider implements BaseProvider {
 		}
 		provider.send(payload, (error?: Error, result?: JsonRpcResponse)=>{
 			if (error) {
-				callback(Error.new(error).ext({ httpErr: true }));
+				callback(Error.new(error).ext({ httpErr: true, url: provider.rpc }));
 			} else if (result) {
 				this.onResult(result, rpc);
 
