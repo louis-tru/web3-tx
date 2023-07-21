@@ -114,7 +114,7 @@ export class MultipleProvider implements BaseProvider {
 
 	logs: number = 0; // print logs
 
-	constructor(provider: Provider | Provider[], priority?: number[], mode?: MPSwitchMode) {
+	constructor(provider: Provider | Provider[], priority?: number[], mode?: MPSwitchMode, timeout?: number) {
 		var priority_ = priority || [];
 		this._BaseProvider = (Array.isArray(provider) ? provider : [provider]).map((provider: any, j)=>{
 			var { WebsocketProvider, IpcProvider } = Web3Raw.providers;
@@ -134,9 +134,9 @@ export class MultipleProvider implements BaseProvider {
 				}
 
 				if (/^https?:/.test(provider)) { // http
-					baseProvider = new HttpProvider(provider, { timeout: TRANSACTION_REQUEST_TIMEOUT }) as any;
+					baseProvider = new HttpProvider(provider, { timeout: timeout || TRANSACTION_REQUEST_TIMEOUT }) as any;
 				} else if (/^wss?:/.test(provider)) { // web socket
-					baseProvider = new WebsocketProvider(provider, { timeout: TRANSACTION_REQUEST_TIMEOUT }) as any;
+					baseProvider = new WebsocketProvider(provider, { timeout: timeout || TRANSACTION_REQUEST_TIMEOUT }) as any;
 				} else if (/^[\\/]/.test(provider)) { // ipc
 					baseProvider = new IpcProvider(provider, net) as any;
 				} else {
