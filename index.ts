@@ -342,8 +342,6 @@ export class Web3 implements IWeb3 {
 	private _provider?: MultipleProvider;
 	private _watchInterval = 1e4; // 10s
 	private _getChainId = 0;
-	private _gasPriceTimeout = 0;
-	private _gasPrice = 0;
 	private _getBlockNumber = 0;
 	private _getBlockNumberTimeout = 0;
 	private _gasPriceLimit = 0;
@@ -405,11 +403,7 @@ export class Web3 implements IWeb3 {
 	}
 
 	async gasPrice() {
-		if (!this._gasPrice || this._gasPriceTimeout < Date.now()) {
-			this._gasPrice = Number(await utils.timeout(this.eth.getGasPrice(), 1e4)) || 0;
-			this._gasPriceTimeout = Date.now() + 6e4; // 60s
-		}
-		return this._gasPrice;
+		return Number(await this.eth.getGasPrice()) || 0;
 	}
 
 	async getBlockNumber() {
