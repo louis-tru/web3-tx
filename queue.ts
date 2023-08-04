@@ -30,30 +30,32 @@
 
 import utils from 'somes';
 import {IWeb3} from './index';
-import {List} from 'somes/event';
+import {List,ListItem} from 'somes/event';
 import * as base from './base';
 import errno from './errno';
 
 export interface Options {
+	id?: number;
 	from?: string;
 	retry?: number;
-	nonceTimeout?: number;
+	retryDelay?: number;
+	nonceTimeout?: number; // pending nonce timeout
 }
 
 export interface DeOptions {
 	from: string;
 	nonce: number;
 	gasPrice: number;
-}
-
-interface DeOptionsInl extends DeOptions {
-	nonceTimeout: number;
+	retainNonceTimeout: number; // retain
 }
 
 interface QueueItem {
+	id: number;
 	retry: number;
+	execTime: number;
+	retryDelay: number;
 	options: Options;
-	dequeue: (nonce: DeOptionsInl | null)=>Promise<any>
+	dequeue: (listItem: ListItem<QueueItem>, nonce: DeOptions)=>Promise<any>
 }
 
 interface Queue {
@@ -61,12 +63,11 @@ interface Queue {
 	running: boolean;
 }
 
-
 export class MemoryTransactionQueue {
-
 	private _host: IWeb3;
-	private _tx_queues: Dict<Queue> = {};
-	private _tx_nonceQueue: Dict<List<DeOptionsInl>> = {};
+	private _tx_queues: Dict<Queue> = {}; // from address => Queue
+	private _tx_nonceQueue: Dict<List<DeOptions>> = {};
+	private _listItems: Dict<ListItem<QueueItem>> = {};
 
 	constructor(web3: IWeb3) {
 		this._host = web3;
@@ -76,20 +77,29 @@ export class MemoryTransactionQueue {
 		return this._host;
 	}
 
-	async beforeDequeue() {}
+	async beforeDequeue() {
+		// subclass implementation
+	}
 
 	private async _dequeue(queue: Queue) {
-		var first = queue.list.first;
+		let first = queue.list.first;
 		if (first) {
-			try {
-				var ctx = first.value;
-				await this.beforeDequeue();
-				var opts = await this.getNonce_(ctx.options.from, ctx.options.nonceTimeout);
-				queue.list.shift();
-				await ctx.dequeue(opts);
-			} catch (err) {
-				console.warn('#TransactionQueue#_dequeue', err);
-				await utils.sleep(2e3); // sleep 1s
+			if (first.value.execTime > Date.now()) {
+				await utils.sleep(5e3); // sleep 5s
+			} else {
+				try {
+					await this.beforeDequeue();
+					let {from,nonceTimeout} = first.value.options;
+					let opts = await this.getNonce_2(from, nonceTimeout);
+					if (opts) {
+						await first.value.dequeue(first, opts);
+					} else {
+						await utils.sleep(5e3); // sleep 5s
+					}
+				} catch (err) {
+					console.warn('#TransactionQueue._dequeue', err);
+					await utils.sleep(5e3); // sleep 5s
+				}
 			}
 			utils.nextTick(()=>this._dequeue(queue));
 		} else {
@@ -98,34 +108,50 @@ export class MemoryTransactionQueue {
 	}
 
 	/**
+	 * @func cancel() by id
+	*/
+	cancel(id: number) {
+		let item = this._listItems[id];
+		if (item) {
+			this.deleteItem(item);
+		}
+	}
+
+	private deleteItem(item: ListItem<QueueItem>) {
+		if (item.host)
+			item.host.delete(item);
+		delete this._listItems[item.value.id];
+	}
+
+	/**
 	 * @func push(exec, options) 排队交易
 	 */
-	async push<R>(exec: (arg: DeOptions)=>Promise<R>, opts?: Options): Promise<R> {
+	async push<R>(exec: (arg: DeOptions)=>Promise<R>, opts?: Options) {
 
-		var options = {from: '', retry: 0, ...opts};
-		var from = (options.from = options.from || await this._host.defaultAccount()).toLowerCase();
-		var retry = options.retry = Number(options.retry) || 0;
-		var queue = this._tx_queues[from];
+		let options = {from: '', retry: 0, ...opts};
+		let from = (options.from = options.from || await this._host.defaultAccount()).toLowerCase();
+		let retry = options.retry = Number(options.retry) || 0;
+		let retryDelay = options.retryDelay = Math.max(Number(options.retryDelay) || 0, 1e4); // min 10s
+		let queue = this._tx_queues[from];
+		let id = options.id || utils.getId();
+
 		if (!queue) {
 			this._tx_queues[from] = queue = { list: new List(), running: false };
 		}
 
-		return await new Promise((resolve, reject)=>{
-			var item: QueueItem = {
-				retry,
-				options,
-				dequeue: async (opts: DeOptionsInl | null)=>{
+		let promise = new Promise<R>((resolve,reject)=>{
+			utils.assert(!this._listItems[id], errno.ERR_REPEAT_MEMORY_TX_QUEUE_ID);
+
+			this._listItems[id] = queue.list.push({
+				id, options, retry, retryDelay, execTime: 0,
+				dequeue: async (item, opts)=>{
+					let r: R, _err, isRetry = false;
 					try {
-						if (opts) {
-							resolve(await exec({...opts}));
-						} else { // retry, wait nonce
-							queue.list.unshift(item); // retry queue
-							await utils.sleep(1e4); // sleep 10s
-							return;
-						}
+						r = await exec({...opts});
 					} catch(err: any) {
-						var opts_ = opts as DeOptionsInl;
-						var errnos: ErrnoCode[] = [
+						opts.retainNonceTimeout = -1; // release nonce;
+						_err = err;
+						let errnos: ErrnoCode[] = [
 							errno.ERR_EXECUTION_REVERTED, // call exec reverted
 							errno.ERR_EXECUTION_REVERTED_Values_Invalid,
 							errno.ERR_EXECUTION_CALL_FAIL, // exec fail
@@ -137,41 +163,52 @@ export class MemoryTransactionQueue {
 							errno.ERR_TRANSACTION_GAS_LIMIT, // gas limit
 							errno.ERR_TRANSACTION_TIMEOUT, // timeout
 						];
-						if ( errnos.find(([e])=>err.errno==e) ) {
-							if (item.retry--) {
-								console.warn(err);
-								queue.list.push(item); // retry back
+						if ( errnos.find(([e])=>err.errno==e) ) { // match errors ok
+							if (item.value.retry-- > 0) {
+								isRetry = true; // continue wait retry
 							} else {
-								if (err.errno != errno.ERR_TRANSACTION_INSUFFICIENT_FUNDS[0])
-									opts_.nonceTimeout = Date.now() + 3e4; // wait 30s
-								reject(err);
+								if (err.errno == errno.ERR_TRANSACTION_INSUFFICIENT_FUNDS[0]) {
+									if (item.value.retry-- == 0) // force try once
+										isRetry = true; // continue wait retry
+								}
 							}
-						} else { // force retry
-							console.warn('#TransactionQueue#push#dequeue, web3 tx fail force retry *********', opts, err);
-							opts_.nonceTimeout = 0; // disable wait nonce Timeout
-							queue.list.unshift(item); // retry queue
-							await utils.sleep(2e3); // sleep 2s
+						} else { // unknown error force retry, maybe http error
+							console.warn('#TransactionQueue.push.dequeue, web3 tx fail force retry *********', opts);
+							isRetry = true; // continue wait retry
+						}
+					}
+
+					if (isRetry) {
+						if (_err)
+							console.warn(_err);
+						item.value.execTime = Date.now() + item.value.retryDelay; // retry
+					} else {
+						this.deleteItem(item); // delete queue item
+						if (_err) {
+							reject(_err);
+						} else {
+							resolve(r!);
 						}
 					}
 				},
-			};
-
-			queue.list.push(item);
+			});
 			// console.log('web3.enqueue', opts);
 
 			if (!queue.running) {
 				queue.running = true;
 				this._dequeue(queue);
 			}
-		});
+		})
+
+		return await promise;
 	}
 
 	/**
-	 * @func clear() junk data
+	 * @func clear() clear junk data
 	*/
-	async clear(from: string) {
-		var curNonce = await this._host.getNonce(from);
-		var list = (this._tx_nonceQueue[from] || (this._tx_nonceQueue[from] = new List()));
+	private async clear(account: string) {
+		var curNonce = await this._host.getNonce(account);
+		var list = (this._tx_nonceQueue[account] || (this._tx_nonceQueue[account] = new List()));
 		// delete complete
 		var item = list.first;
 		while (item && item.value.nonce < curNonce) {
@@ -182,33 +219,35 @@ export class MemoryTransactionQueue {
 		return curNonce;
 	}
 
-	// @private getNonce_()
-	private async getNonce_(account?: string, _timeout?: number, greedy?: boolean): Promise<DeOptionsInl | null> {
-		var from = account || await this._host.defaultAccount();
+	// @private getNonce_2()
+	private async getNonce_2(account?: string, timeout?: number, greedy?: boolean): Promise<DeOptions | null> {
+		let from = account || await this._host.defaultAccount();
 		utils.assert(from, 'getNonce error account empty');
 
-		var now = Date.now();
-		var gasPrice = await this._host.gasPrice();
-		var nonceTimeout = (Number(_timeout) || base.TRANSACTION_NONCE_TIMEOUT) + now;
-		var curNonce = await this.clear(from);
-		var list = this._tx_nonceQueue[from];
+		let now = Date.now();
+		let gasPrice = await this._host.gasPrice();
+		let newRetainNonceTimeout = (Number(timeout) || base.TRANSACTION_NONCE_TIMEOUT) + now;
+		let curNonce = await this.clear(from);
+		let list = this._tx_nonceQueue[from];
+		let item = list.first;
+		let nonce = curNonce;
 
-		var item = list.first;
-		var nonce = curNonce;
 		while (item) {
-			var opt = item.value;
-			utils.assert(nonce == opt.nonce, '#TransactionQueue#getNonce_, nonce no match');
-			if (now > opt.nonceTimeout) { // pending and is timeout
-				opt.nonceTimeout = nonceTimeout; // new tomeiut
+			let opt = item.value;
+			// list nonce must be contiguous
+			utils.assert(nonce == opt.nonce, '#TransactionQueue.getNonce_2, nonce no match');
+			if (now > opt.retainNonceTimeout) { // pending and is timeout
+				opt.retainNonceTimeout = newRetainNonceTimeout; // new timeout
 				opt.gasPrice = opt.gasPrice ? Math.max(gasPrice, opt.gasPrice + 1): gasPrice;
 				return opt;
 			}
 			nonce++;
 			item = item.next;
 		}
-
 		if (greedy || curNonce == nonce) {
-			var opt = { from, nonce, gasPrice, nonceTimeout };
+			let opt = {
+				from, nonce, gasPrice, retainNonceTimeout: newRetainNonceTimeout
+			};
 			list.push(opt);
 			return opt;
 		}
@@ -219,9 +258,8 @@ export class MemoryTransactionQueue {
 	/**
 	 * @func getNonce() 获取排队nonce
 	 */
-	async getNonce(account?: string, timeout?: number): Promise<DeOptions> {
-		var  { nonceTimeout, ...opts} = await this.getNonce_(account, timeout, true) as DeOptionsInl;
-		return opts;
+	getNonce(account?: string, timeout?: number) {
+		return this.getNonce_2(account, timeout, true);
 	}
 
 }

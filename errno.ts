@@ -18,6 +18,8 @@ export class ErrnoList extends BaseErrnoList {
 	ERR_TRANSACTION_SEND_FAIL: ErrnoCode = [101012, 'ERR_TRANSACTION_SEND_FAIL']
 	ERR_TRANSACTION_GAS_LIMIT: ErrnoCode = [101013, 'ERR_TRANSACTION_GAS_LIMIT']
 	ERR_TRANSACTION_STATUS_FAIL: ErrnoCode = [101014, 'ERR_TRANSACTION_STATUS_FAIL', 'send transaction fail']
+	//
+	ERR_REPEAT_MEMORY_TX_QUEUE_ID: ErrnoCode = [101015, 'ERR_REPEAT_MEMORY_TX_QUEUE_ID']
 };
 
 export default new ErrnoList();
