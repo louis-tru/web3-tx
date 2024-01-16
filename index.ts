@@ -169,7 +169,7 @@ export class Contract extends ContractBase {
 	private _host: IWeb3;
 	private __requestManager: any;
 
-	constructor(host: IWeb3, jsonInterface: AbiItem[], address: string, options?: ContractOptions) {
+	constructor(host: IWeb3, jsonInterface: AbiItem[], address?: string, options?: ContractOptions) {
 		super(jsonInterface, address, options);
 		this._host = host;
 		this._Init(jsonInterface, address);
@@ -199,7 +199,7 @@ export class Contract extends ContractBase {
 		}
 	}
 
-	private _Init(jsonInterface: AbiItem[], address: string) {
+	private _Init(jsonInterface: AbiItem[], address?: string) {
 		var self = this;
 
 		async function signTx(method: base.ContractSendMethod, opts?: TxOptions) {
